@@ -1,0 +1,32 @@
+name: Save map snapshot
+
+on:
+  schedule:
+    - cron: "17 */3 * * *"      # кожні 3 години
+  workflow_dispatch:             # можна запустити вручну на вкладці Actions
+  push:
+    paths:
+      - "scripts/snapshot.py"
+      - ".github/workflows/snapshot.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Save snapshot
+        run: python scripts/snapshot.py
+        env:
+          MAP_ID: "1E7cefbjfT33zErTQADATnyZ_SVChrJc"
+      - name: Commit changes
+        run: |
+          git config user.name "uam-bot"
+          git config user.email "uam-bot@users.noreply.github.com"
+          git add history
+          git diff --cached --quiet || (git commit -m "Map snapshot $(date -u +%F)" && git push)
