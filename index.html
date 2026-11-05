@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>UAM — Ukraine Analytic Map</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b2a4a'/%3E%3Ctext x='32' y='42' font-family='Arial' font-weight='900' font-size='24' text-anchor='middle' fill='%23ffd500'%3EUAM%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<style>
+  :root { --card:#fff; --ink:#111; --muted:#666; --line:#d6d6d6; --accent:#111; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #map { position: absolute; inset: 0; background: #dfe3e6; }
+  .leaflet-container { font: inherit; }
+
+  /* Емблема — лівий верхній кут */
+  #logo { position: absolute; top: 10px; left: 10px; z-index: 1000; background: #fff; border-radius: 10px;
+          padding: 6px 8px; box-shadow: 0 2px 10px rgba(0,0,0,.3); line-height: 0; }
+  #logo img { width: 112px; height: auto; display: block; }
+
+  /* Нижня панель: вимірювання, пошук, статус */
+  :root { --dock-h: 190px; }
+  #dock { position: absolute; left: 8px; right: 8px; bottom: calc(30px + env(safe-area-inset-bottom, 0px)); z-index: 1000;
+          display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+  #dock > * { pointer-events: auto; width: 100%; max-width: 720px; }
+  #tools { display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+  #tools > * { pointer-events: auto; }
+  #readout { background: var(--accent); color: #fff; border-radius: 12px; padding: 8px 14px; font-size: 15px; line-height: 1.4;
+             box-shadow: 0 2px 10px rgba(0,0,0,.3); text-align: center; display: none; width: 100%; }
+  #readout b { font-size: 18px; }
+  #bar { display: flex; gap: 8px; background: var(--card); padding: 6px; border-radius: 14px; width: auto !important;
+         box-shadow: 0 2px 10px rgba(0,0,0,.3); }
+  #bar button { width: 76px; height: 54px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--line); background: #fff;
+                border-radius: 10px; cursor: pointer; touch-action: manipulation; padding: 0; }
+  #bar button img { height: 34px; width: 34px; object-fit: contain; display: block; pointer-events: none; }
+  #bar button:hover { background: #f1f1f1; }
+  #bar button.on { background: #dbe9fb; border-color: #0057b8; }
+  #bar button svg { width: 32px; height: 32px; display: block; pointer-events: none; }
+  .measuring #map, .drawing #map { cursor: crosshair; }
+  body.drawing .leaflet-container { touch-action: none !important; }
+
+  /* Панель малювання (відкривається олівцем) */
+  #pen { display: none; background: var(--card); border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,.35); padding: 8px; }
+  #dock > #pen { max-width: 440px; }
+  #pen.open { display: block; }
+  body.pen-on #dock > #search { display: none; }
+  #pen .prow { display: flex; gap: 6px; align-items: center; justify-content: space-between; }
+  #pen .prow + .prow { margin-top: 8px; }
+  #pen .tools button { flex: 1; height: 48px; border: 2px solid var(--line); background: #fff; border-radius: 10px; cursor: pointer; color: var(--ink); padding: 0; touch-action: manipulation; }
+  #pen .tools button svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  #pen .tools button.on { background: #dbe9fb; border-color: #0057b8; }
+  #pen .colors { display: none; flex-wrap: wrap; justify-content: center; gap: 6px; }
+  #pen .colors.open { display: flex; }
+  #pen .colors button { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #bbb; cursor: pointer; padding: 0; touch-action: manipulation; }
+  #pen .colors button.on { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #0057b8; }
+  #pen .colors .custom { position: relative; width: 32px; height: 32px; border-radius: 50%; border: 2px dashed #888; display: flex; align-items: center; justify-content: center;
+                         font-size: 20px; line-height: 1; color: #555; cursor: pointer; overflow: hidden; }
+  #pen .colors .custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+  #pen .pal button, #pen .hist button { height: 42px; border: 2px solid var(--line); background: #fff; border-radius: 10px; cursor: pointer; font: inherit; font-size: 14px; color: var(--ink); padding: 0 10px; touch-action: manipulation; }
+  #pen .pal #pPal { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; }
+  #pen .pal #pPal svg, #pen .hist svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  #pen #palDot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #888; background: #e03131; display: block; }
+  #pen .pal button[data-w] { width: 46px; display: flex; align-items: center; justify-content: center; padding: 0; }
+  #pen .pal button[data-w] i { display: block; width: 24px; background: #111; border-radius: 4px; }
+  #pen .pal button[data-w].on, #pen .pal #pPal.on { background: #dbe9fb; border-color: #0057b8; }
+  #pen .hist button { flex: 1; }
+  #pen .hist button:disabled { opacity: .35; cursor: default; }
+  #pen .misc button { height: 42px; border: 2px solid var(--line); background: #fff; border-radius: 10px; cursor: pointer; font: inherit; font-size: 14px; color: var(--ink); padding: 0 10px; touch-action: manipulation; }
+  #pen .misc button[data-w] { width: 46px; display: flex; align-items: center; justify-content: center; padding: 0; }
+  #pen .misc button[data-w] i { display: block; width: 24px; background: #111; border-radius: 4px; }
+  #pen .misc button[data-w].on { background: #dbe9fb; border-color: #0057b8; }
+  #pen .misc #pUndo, #pen .misc #pClear { flex: 1; }
+  @media (max-width: 400px) { #bar button { width: 64px; } }
+
+  #status { text-align: center; font-size: 11px; color: #222; background: rgba(255,255,255,.88); border-radius: 8px; padding: 3px 10px; width: auto !important; }
+  #status button { all: unset; cursor: pointer; text-decoration: underline; margin-left: 6px; }
+
+  /* Елементи керування Leaflet — над нижньою панеллю: шари зліва, масштаб +/- справа */
+  .leaflet-bottom { bottom: var(--bar-bottom, 120px); }
+  #attr { position: absolute; right: 0; bottom: calc(2px + env(safe-area-inset-bottom, 0px)); z-index: 900; font-size: 10px; line-height: 12px; color: #333;
+          background: rgba(255,255,255,.78); padding: 1px 6px; border-radius: 6px 0 0 0; max-width: 100%; text-align: right; }
+  #attr a { color: #0b61a4; text-decoration: none; }
+  .leaflet-top.leaflet-left { margin-top: 78px; }
+  .leaflet-control-zoom a { width: 46px; height: 46px; line-height: 46px; font-size: 24px; }
+  .leaflet-control-layers-toggle { width: 46px; height: 46px; }
+  .leaflet-control-layers-expanded { max-height: 45vh; overflow-y: auto; }
+  @media (max-width: 600px) {
+    #logo img { width: 84px; }
+  }
+  .popup h4 { margin: 0 0 4px; font-size: 15px; }
+  .popup div { font-size: 13px; line-height: 1.4; word-break: break-word; }
+  .popup .k { color: var(--muted); }
+  .vtx { cursor: crosshair; }
+  /* Пошук (великий, внизу) */
+  #search { position: relative; }
+  #sbox { display: flex; align-items: stretch; background: #fff; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,.35); overflow: hidden; min-height: 58px; }
+  #q { flex: 1; min-width: 0; border: 0; outline: 0; padding: 0 14px; font: inherit; font-size: 17px; color: var(--ink); background: transparent; }
+  #q::placeholder { color: #777; }
+  #sbox button { border: 0; background: transparent; padding: 0 18px; font: inherit; font-size: 17px; font-weight: 600; cursor: pointer; color: var(--ink); touch-action: manipulation; }
+  #sbox button:hover { background: #f1f1f1; }
+  #sgo { background: #111 !important; color: #fff !important; }
+  #sx { color: var(--muted); font-size: 26px; font-weight: 400 !important; padding: 0 12px !important; display: none; }
+  #res { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); background: #fff; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,.35);
+         max-height: 50vh; overflow-y: auto; display: none; }
+  #res .hd { padding: 7px 14px; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); background: #f6f6f6; }
+  #res .it { padding: 13px 14px; font-size: 16px; line-height: 1.3; cursor: pointer; border-top: 1px solid #eee; word-break: break-word; }
+  #res .it:hover, #res .it.sel { background: #f1f1f1; }
+  #res .it small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
+  #res .msg { padding: 13px 14px; font-size: 14px; color: var(--muted); }
+  /* Верхня права панель: календар змін + мова */
+  #tr { position: absolute; top: 10px; right: 10px; z-index: 1000; display: flex; gap: 8px; align-items: flex-start; }
+  #tr > div { position: static; }
+  #calBtn, #langBtn { width: 56px; height: 56px; border: 0; border-radius: 12px; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.3); cursor: pointer;
+             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 0; touch-action: manipulation; color: var(--ink); }
+  #calBtn span, #langBtn span { font-size: 11px; font-weight: 700; letter-spacing: .03em; }
+  .step { width: 42px; height: 56px; border: 0; border-radius: 12px; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.3); cursor: pointer;
+          font-size: 30px; line-height: 1; color: var(--ink); padding: 0 0 4px; touch-action: manipulation; }
+  .step:disabled { opacity: .35; cursor: default; }
+  body.archive #calBtn { background: #0057b8; color: #fff; }
+  body.archive #calBtn svg { stroke: #fff; }
+  body.archive #map { outline: 4px solid #0057b8; outline-offset: -4px; }
+  #langMenu { display: none; position: absolute; top: 64px; right: 0; background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.35); overflow: hidden; min-width: 170px; }
+  #langMenu.open { display: block; }
+  #langMenu button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; border: 0; background: #fff; padding: 14px 16px;
+                     font: inherit; font-size: 16px; color: var(--ink); cursor: pointer; text-align: left; touch-action: manipulation; }
+  #langMenu button + button { border-top: 1px solid #eee; }
+  #langMenu button:hover { background: #f1f1f1; }
+  #langMenu button.act { font-weight: 700; }
+  #langMenu button.act::after { content: "✓"; }
+  #calPanel { display: none; position: absolute; top: 64px; right: 0; width: min(340px, calc(100vw - 20px)); background: #fff; border-radius: 14px;
+              box-shadow: 0 2px 14px rgba(0,0,0,.4); padding: 12px; color: var(--ink); }
+  #calPanel.open { display: block; }
+  #calPanel .ch { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  #calPanel .ch b { font-size: 16px; }
+  #calPanel .ch button { width: 44px; height: 40px; border: 1px solid var(--line); background: #fff; border-radius: 10px; font-size: 20px; cursor: pointer; }
+  #calPanel .cq { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+  #calPanel .cq button { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 10px 6px; font: inherit; font-size: 14px; cursor: pointer; color: var(--ink); }
+  #calPanel .cq button:hover, #calPanel .ch button:hover { background: #f1f1f1; }
+  #calPanel .cg { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  #calPanel .cg .w { text-align: center; font-size: 11px; color: var(--muted); padding: 2px 0 4px; text-transform: uppercase; }
+  #calPanel .cg .d { position: relative; height: 40px; border: 0; background: #f4f4f4; border-radius: 8px; font: inherit; font-size: 14px; cursor: pointer; color: var(--ink); padding: 0; }
+  #calPanel .cg .d.dis { background: transparent; color: #bbb; cursor: default; }
+  #calPanel .cg .d.sel { background: #0057b8; color: #fff; font-weight: 700; }
+  #calPanel .cg .d.has::after { content: ""; position: absolute; bottom: 4px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: #0057b8; }
+  #calPanel .cg .d.sel.has::after { background: #fff; }
+  #calPanel .cn { margin-top: 10px; font-size: 13px; color: #5c4400; background: #fff3cd; border-radius: 8px; padding: 8px 10px; display: none; }
+  #calPanel .cl { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .pin { width: 18px; height: 18px; border-radius: 50%; background: #e03131; border: 3px solid #fff; box-shadow: 0 0 0 2px #e03131, 0 2px 6px rgba(0,0,0,.5); }
+
+  #tilewarn { display: none; position: absolute; top: 64px; left: 50%; transform: translateX(-50%); z-index: 1100; width: min(92%, 460px);
+              background: #fff3cd; color: #5c4400; border: 1px solid #e6c65c; border-radius: 10px; padding: 10px 14px; font-size: 13px; line-height: 1.4;
+              box-shadow: 0 2px 10px rgba(0,0,0,.3); }
+
+  /* ======== Адаптація: безпечні зони, висота панелей ======== */
+  #logo { left: calc(10px + env(safe-area-inset-left, 0px)); }
+  #tr { right: calc(10px + env(safe-area-inset-right, 0px)); }
+  #calPanel { max-height: calc(100vh - 80px); overflow-y: auto; }
+
+  /* ======== Альбомна орієнтація та комп'ютер: бічна панель інструментів, пошук угорі ======== */
+  @media (min-width: 640px) and (orientation: landscape), (min-width: 900px) {
+    #dock { top: 0; left: 0; right: 0; bottom: 0; display: block; }
+    #dock > #search { position: absolute; top: 10px; left: calc(150px + env(safe-area-inset-left, 0px)); width: min(480px, calc(100vw - 460px)); max-width: none; }
+    #sbox { min-height: 46px; border-radius: 12px; }
+    #q { font-size: 16px; }
+    #sbox button { font-size: 15px; padding: 0 16px; }
+    #sx { font-size: 22px; }
+    #res { bottom: auto; top: calc(100% + 8px); max-height: calc(100vh - 90px); }
+    #res .it { padding: 10px 14px; font-size: 15px; }
+    #dock > #tools { position: absolute; left: calc(10px + env(safe-area-inset-left, 0px)); top: 86px; width: auto; max-width: none;
+                     flex-direction: row; align-items: flex-start; gap: 10px; }
+    #bar { flex-direction: column; order: 1; }
+    #bar button { width: 60px; height: 54px; }
+    #tools #pen { order: 2; width: 330px; }
+    #readout { position: fixed; top: 66px; left: 50%; transform: translateX(-50%); width: auto; max-width: 70vw; white-space: nowrap; }
+    #dock > #status { position: absolute; left: 50%; transform: translateX(-50%); bottom: 22px; }
+    .leaflet-bottom { bottom: 30px; }
+    .leaflet-top.leaflet-left { margin-top: 0; top: auto; bottom: 30px; left: 62px; }
+  }
+
+  /* Альбомна орієнтація на телефоні (невисокий екран): усе компактніше */
+  @media (min-width: 640px) and (orientation: landscape) and (max-height: 520px) {
+    #logo { padding: 4px 6px; }
+    #logo img { width: 78px; }
+    #dock > #search { left: calc(108px + env(safe-area-inset-left, 0px)); width: min(440px, calc(100vw - 360px)); }
+    #sbox { min-height: 40px; }
+    #q { font-size: 15px; }
+    #dock > #tools { top: 62px; gap: 8px; }
+    #bar { gap: 6px; padding: 5px; }
+    #bar button { width: 50px; height: 44px; }
+    #bar button img, #bar button svg { width: 27px; height: 27px; height: 27px; }
+    #tools #pen { width: 290px; padding: 6px; }
+    #pen .tools button { height: 40px; }
+    #pen .colors button { width: 30px; height: 30px; }
+    #pen .misc button { height: 36px; }
+    #pen .prow + .prow { margin-top: 6px; }
+    #calBtn, #langBtn { width: 46px; height: 46px; }
+    .step { width: 34px; height: 46px; font-size: 26px; }
+    #calBtn svg, #langBtn svg { width: 20px; height: 20px; }
+    #langMenu, #calPanel { top: 54px; }
+    #langMenu button { padding: 10px 14px; font-size: 15px; }
+    .leaflet-control-zoom a { width: 38px; height: 38px; line-height: 38px; font-size: 20px; }
+    .leaflet-control-layers-toggle { width: 40px; height: 40px; }
+    #dock > #status { bottom: 20px; }
+  }
+
+  /* Повний екран: лишаються лише емблема, календар (з датою та стрілками) і кнопка виходу */
+  #fsBtn { width: 44px; height: 44px; border: 0; border-radius: 10px; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.3); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+  #fsBtn svg { width: 24px; height: 24px; fill: none; stroke: #111; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  body.full #dock, body.full #lang, body.full #tilewarn,
+  body.full .leaflet-control-zoom, body.full .leaflet-control-layers, body.full .leaflet-control-scale { display: none !important; }
+  body.full #fsBtn { opacity: .55; }
+  body.full .leaflet-bottom { bottom: calc(24px + env(safe-area-inset-bottom, 0px)) !important; }
+
+  /* ======== UAM 2.0: темний «штабний» інтерфейс ======== */
+  :root { --ink:#e8eef6; --muted:#8fa3b8; --line:#26405c; --accent:#ffd500; --p1:rgba(10,22,38,.86); --p2:#12263d; --yel:#ffd500; --blu:#2f80ed; }
+  body { background:#07111d; }
+  #boot { position:fixed; inset:0; z-index:5000; background:radial-gradient(circle at 50% 40%,#0f2a4a,#050c15); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; color:#fff; transition:opacity .45s; }
+  #boot.done { opacity:0; pointer-events:none; }
+  #boot b { font-size:44px; letter-spacing:.18em; color:var(--yel); margin-top:18px; }
+  #boot span { font-size:13px; letter-spacing:.3em; text-transform:uppercase; color:#9db4cc; }
+  #boot .spin { width:54px; height:54px; border-radius:50%; border:4px solid #1d3a5c; border-top-color:var(--yel); animation:uspin .9s linear infinite; }
+  @keyframes uspin { to { transform:rotate(360deg); } }
+  #logo, #bar, #pen, #sbox, #calBtn, #langBtn, .step, #fsBtn, #langMenu, #calPanel, #res, #status {
+    background:var(--p1); color:var(--ink); border:1px solid #2b4a6b; border-radius:14px;
+    -webkit-backdrop-filter:blur(14px) saturate(1.4); backdrop-filter:blur(14px) saturate(1.4);
+    box-shadow:0 8px 30px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.07);
+  }
+  #logo { background:#fff; border-color:var(--yel); border-width:2px; }
+  #bar { padding:7px; gap:7px; }
+  #bar button, #pen .tools button, #pen .pal button, #pen .misc button, #pen .hist button, #calPanel .cq button, #calPanel .ch button, #langMenu button {
+    background:var(--p2); color:var(--ink); border:1px solid #2b4a6b; border-radius:11px; transition:all .15s;
+  }
+  #bar button img { filter:invert(1) brightness(1.15); }
+  #bar button:hover, #pen button:hover, #calPanel .cq button:hover, #calPanel .ch button:hover, #langMenu button:hover { background:#1b3a5e; border-color:var(--yel); }
+  #bar button:active, #pen button:active { transform:scale(.94); }
+  #bar button.on, #pen .tools button.on, #pen .pal button.on, #pen .pal #pPal.on, #pen .misc button.on { background:var(--yel); border-color:var(--yel); color:#07111d; }
+  #bar button.on img { filter:none; }
+  #pen .pal button[data-w] i, #pen .misc button[data-w] i { background:var(--ink); }
+  #pen .pal button.on i, #pen .misc button.on i { background:#07111d; }
+  #calBtn svg, #langBtn svg { stroke:var(--yel) !important; }
+  #calBtn span, #langBtn span { color:var(--ink); }
+  .step { color:var(--yel); }
+  #q { color:var(--ink); } #q::placeholder { color:#6f86a0; }
+  #sbox button { color:var(--ink); } #sbox button:hover { background:#1b3a5e; }
+  #sgo { background:var(--yel) !important; color:#07111d !important; }
+  #res .hd { background:#0d1e33; color:var(--yel); }
+  #res .it { border-top:1px solid #1d3550; } #res .it:hover, #res .it.sel { background:#1b3a5e; }
+  #res .it small, #res .msg { color:var(--muted); }
+  #readout { background:var(--yel); color:#07111d; border-radius:12px; font-weight:600; box-shadow:0 8px 30px rgba(0,0,0,.55); }
+  #calPanel .cg .d { background:var(--p2); color:var(--ink); } #calPanel .cg .d.dis { background:transparent; color:#3d5670; }
+  #calPanel .cg .d.sel { background:var(--yel); color:#07111d; } #calPanel .cg .d.has::after { background:var(--yel); }
+  #calPanel .cg .d.sel.has::after { background:#07111d; }
+  #calPanel .cg .w, #calPanel .cl { color:var(--muted); }
+  body.archive #calBtn { background:var(--yel); } body.archive #calBtn span { color:#07111d; } body.archive #calBtn svg { stroke:#07111d !important; }
+  body.archive #map { outline:4px solid var(--yel); outline-offset:-4px; }
+  #status { border-radius:999px; padding:5px 16px; font-size:12px; color:var(--ink); } #status button { color:var(--yel); }
+  #attr { background:rgba(7,17,29,.8); color:#9db4cc; } #attr a { color:var(--yel); }
+  .leaflet-control-zoom, .leaflet-control-layers { background:var(--p1) !important; border:1px solid #2b4a6b !important; border-radius:14px !important; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,.55) !important; }
+  .leaflet-control-zoom a, .leaflet-control-layers-toggle, .leaflet-control-layers-list { background-color:transparent !important; color:var(--ink) !important; border-color:#26405c !important; }
+  .leaflet-control-layers-toggle { filter:invert(1); }
+  .leaflet-control-layers-expanded { color:var(--ink); }
+  .leaflet-popup-content-wrapper { background:var(--p1); color:var(--ink); border:1px solid #2b4a6b; border-radius:14px; backdrop-filter:blur(14px); box-shadow:0 10px 34px rgba(0,0,0,.6); }
+  .leaflet-popup-tip { background:var(--p1); }
+  .popup h4 { color:var(--yel); font-size:16px; } .popup .k { color:var(--muted); }
+  #tilewarn { background:#3a2f06; color:#ffe69c; border-color:#8a6d00; border-radius:14px; }
+  ::-webkit-scrollbar { width:8px; } ::-webkit-scrollbar-thumb { background:#2b4a6b; border-radius:8px; }
+
+  /* ======== UAM 3.0: новий каркас інтерфейсу ======== */
+  #logo { display:flex; align-items:center; gap:10px; line-height:1; padding:0 16px; height:46px; text-decoration:none; background:linear-gradient(135deg,#0d2038,#12315a) !important; border:1px solid var(--yel) !important; border-radius:14px; }
+  #logo .b1 { font:900 22px/1 system-ui,sans-serif; letter-spacing:.14em; color:var(--yel); }
+  #logo .sep { color:#4d6f95; font-size:24px; font-weight:300; }
+  #logo .b2 { font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--ink); white-space:nowrap; }
+  #status { position:relative; padding-left:28px; }
+  #status::before { content:""; position:absolute; left:12px; top:50%; width:8px; height:8px; margin-top:-4px; border-radius:50%; background:#3ddc84; box-shadow:0 0 0 3px rgba(61,220,132,.25); animation:upulse 2s infinite; }
+  body.archive #status::before { background:var(--yel); box-shadow:0 0 0 3px rgba(255,213,0,.25); }
+  @keyframes upulse { 50% { opacity:.35; } }
+  #sbox::before { content:""; width:46px; flex:none; background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffd500' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-4-4'/%3E%3C/svg%3E") center/20px no-repeat; }
+  #q { padding-left:0; }
+  .leaflet-control-scale-line { background:rgba(7,17,29,.8) !important; color:var(--ink) !important; border-color:var(--yel) !important; }
+  @media (max-width:639px) {
+    #logo { height:auto; padding:6px 10px; flex-direction:column; align-items:flex-start; gap:3px; }
+    #logo .sep { display:none; } #logo .b1 { font-size:18px; } #logo .b2 { font-size:8.5px; letter-spacing:.08em; }
+  }
+  @media (min-width: 640px) and (orientation: landscape), (min-width: 900px) {
+    #dock > #search { top:10px; left:calc(360px + env(safe-area-inset-left, 0px)); width:min(520px, calc(100vw - 620px)); }
+    #dock > #tools { left:50%; right:auto; top:auto; bottom:calc(26px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%); flex-direction:column-reverse; align-items:center; gap:10px; width:auto; }
+    #bar { flex-direction:row; padding:6px; gap:6px; border-radius:18px; }
+    #bar button { width:auto; height:46px; padding:0 18px 0 14px; gap:9px; }
+    #bar button::after { content:attr(title); font:600 14px system-ui,sans-serif; color:var(--ink); }
+    #bar button.on::after { color:#07111d; }
+    #bar button img, #bar button svg { width:26px; height:26px; }
+    #tools #pen { width:360px; }
+    #dock > #status { left:12px; top:66px; bottom:auto; transform:none; }
+    .leaflet-top.leaflet-left { top:auto !important; bottom:150px !important; left:auto !important; right:10px !important; margin:0 !important; }
+    .leaflet-bottom.leaflet-left { bottom:26px; }
+  }
+  @media (min-width: 640px) and (orientation: landscape) and (max-height: 520px) {
+    #logo { height:38px; padding:0 12px; } #logo .b2, #logo .sep { display:none; }
+    #dock > #search { left:96px; width:min(440px, calc(100vw - 360px)); }
+    #dock > #tools { bottom:14px; } #bar button { height:40px; padding:0 12px; } #bar button::after { display:none; }
+    #dock > #status { top:54px; } .leaflet-top.leaflet-left { bottom:110px !important; }
+  }
+</style>
+</head>
+<body>
+<div id="boot"><div class="spin"></div><b>UAM</b><span>Ukraine Analytic Map</span></div>
+<div id="map"></div>
+
+<div id="tr">
+  <button id="dPrev" class="step" aria-label="Попередній день">‹</button>
+  <div id="cal">
+    <button id="calBtn" aria-haspopup="true">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+      <span id="calCode">LIVE</span>
+    </button>
+    <div id="calPanel"></div>
+  </div>
+  <button id="dNext" class="step" aria-label="Наступний день">›</button>
+  <div id="lang">
+    <button id="langBtn" aria-haspopup="true">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg>
+      <span id="langCode">UK</span>
+    </button>
+    <div id="langMenu">
+      <button data-l="uk">Українська</button>
+      <button data-l="en">English</button>
+      <button data-l="ru">Русский</button>
+    </div>
+  </div>
+</div>
+
+<a id="logo" href="https://t.me/ukrainanalitic" target="_blank" rel="noopener" title="Telegram: ukrainanalitic" aria-label="UAM | Ukraine Analytic Map"><span class="b1">UAM</span><span class="sep">|</span><span class="b2">Ukraine Analytic Map</span></a>
+
+<div id="attr"><a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a> · Esri, Maxar · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>, © CARTO, © <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a></div>
+
+<div id="dock">
+  <div id="tools">
+    <div id="readout"></div>
+    <div id="pen">
+      <div class="prow tools">
+        <button data-tool="free"><svg viewBox="0 0 24 24"><path d="M3 17c3-9 5-9 6-4s3 5 6-2 4-5 6-3"/></svg></button>
+        <button data-tool="rect"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="1"/></svg></button>
+        <button data-tool="circle"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg></button>
+        <button data-tool="arrow"><svg viewBox="0 0 24 24"><path d="M5 19L19 5M9 5h10v10"/></svg></button>
+        <button data-tool="erase"><svg viewBox="0 0 24 24"><path d="M20 20H9L3.5 14.5a2 2 0 010-2.8l8-8a2 2 0 012.8 0l5.2 5.2a2 2 0 010 2.8L13 20"/><path d="M7 9.5l7.5 7.5"/></svg></button>
+      </div>
+      <div class="prow pal">
+        <button id="pPal"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18c1.4 0 2-1 1.6-2.1-.5-1.3.2-2.4 1.6-2.4H17a4 4 0 004-4c0-5-4-9.5-9-9.5z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="14.5" cy="7" r="1"/></svg><i id="palDot"></i></button>
+        <button data-w="2"><i style="height:2px"></i></button>
+        <button data-w="4"><i style="height:4px"></i></button>
+        <button data-w="7"><i style="height:7px"></i></button>
+      </div>
+      <div class="prow colors" id="palRow">
+        <button data-color="#e03131" style="background:#e03131"></button>
+        <button data-color="#f76707" style="background:#f76707"></button>
+        <button data-color="#fcc419" style="background:#fcc419"></button>
+        <button data-color="#94d82d" style="background:#94d82d"></button>
+        <button data-color="#2f9e44" style="background:#2f9e44"></button>
+        <button data-color="#15aabf" style="background:#15aabf"></button>
+        <button data-color="#1c7ed6" style="background:#1c7ed6"></button>
+        <button data-color="#1864ab" style="background:#1864ab"></button>
+        <button data-color="#7048e8" style="background:#7048e8"></button>
+        <button data-color="#e64980" style="background:#e64980"></button>
+        <button data-color="#a52714" style="background:#a52714"></button>
+        <button data-color="#8d5524" style="background:#8d5524"></button>
+        <button data-color="#868e96" style="background:#868e96"></button>
+        <button data-color="#ffffff" style="background:#ffffff"></button>
+        <button data-color="#111111" style="background:#111111"></button>
+        <label class="custom" id="palCustom">+<input type="color" id="pCustom" value="#e03131"></label>
+      </div>
+      <div class="prow hist">
+        <button id="pUndo"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3"/></svg></button>
+        <button id="pRedo"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3"/></svg></button>
+        <button id="pClear"></button>
+      </div>
+    </div>
+    <div id="bar">
+      <button id="bLine" title="Лінія" aria-label="Лінія"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAFRUlEQVR42u2dv0vzXBTHz725Ka0OdvTdOr6jCIKgw4OzOGj9Va22f4KjiIN/h84OUkQ6iVDe4uJSEIvDMzo+Y5eSNrm59x0eb4na1iSmza9zIEOKUfh8vvfkpkIOkVIClrsSQuQppZ3X11d5d3cHuq6DEMLz7yGEgG3bsLa2BgyxehfQarXg/Pz8x7/v4uICBfgpXddB0zSglIJt256vp5SClBIymQwK8FNSygF4Py1IXSelRAFBFqUUKKVDYY8ShQKCvUd4XhEoIKDkCyFgeXkZNjY2wLKswWe6rkOj0YBGozH4DAVMSMDq6iqcnp6SLylnTKKAKZRhGMA5L9i2Pa9p2h/OeYEx9tbtdrEFTWslMMbeCCE9TdP+vKf/bdiNGQVMaHvKOS8IIfIAALZtz3+3VUUBAVY2mwXG2Js6V6tgZmYGBQSY8uznRKvzh4cHME1Tcs6BEAJCCMhkMvD09DTyoQ0FeIRPCOnlcrmhAtrtNrTb7bHPCSjA/0NWXtf136ZpLtzc3Ax6Pj4JTwk+pbRjmuZCtVp9rtVqgxaDT8JThn99fQ2apn34FpRSCoQQT9tVQggQQlBAEPC9pl5d3+/3UcBP4Kvz7e1t2NraAs45jHvo+ixhcXHx740Ej4+Hbdt5KSX0+/2F/f19CQBS0zQJAINDnZdKJWma5r9+/xYCHwO/VCqNhX9wcCD7/f6ClBIsyypwzufdHpZlFWzbziN0n8l3wlfX4QqIGXwUEDJ8FBAy/NQLCBt+qgV4ha+2mkHCT62AqMBPpQAn/L29vbHwDw8PJwo/dQKiBj9VAqIIPzUCogo/FQKiDD/xAqIOP9ECFMRer7ccVfiJFRCH5CdWQFySn0gBTvi7u7uRh58oAXFLfqIExKnnJ05AHNtOYgR4gV8ulyMHP9YCnG0nrvBjK8Br8i3LKkQRfiwFJKHtxFZAkpIfOwFJhB8bAUmFHwsBTvg7OzuJgh95AV7gHx0dxQ5+pAX4hS+EyMZpY4HJRwHphR85AWmDHykBTvjb29upgB8ZAQqiYRi/0pL8yAjwm/y47XYiKWAYfMZYKpIfugBn23GbfCFENknwQxPgB37Skh+agGHwR7Wd4+PjxCY/FAFekp8G+FMV4Ad+UtvO1AUg/BAF+O35SdnnhyoAe36IArDthCjACb9YLLpOflrazkQFeIXPOZ9PW9uZmIBh8EfdcCuVSip7/sQEeIWf9uQHKsBL20H4AQvA5IcoAJMfogCEH8xBbNvOq4EDbooQ0lMvsu71er/K5fJ/tVoNGGPAOf/yUtNKpQJXV1f/UEo76np8LeynqQ9+DjfJr1armPzvVsDz87NstVqgadrfnuRCGGMMbm9voV6vj3ydb7VahcvLS0z+d3V2dvYhvV4OSum3yU/j1wteDpbL5UDTtC9JdrMSnG8NH5Z8KWVWrQCsEfMDhBAD8H4mg763l6FtB+H/YICD23Ec6v35pVIJkx+kALfjONTkiGKxCM7pcYjWpwDnXMSVlRWwLAsIISClBF3X4f7+Hl5eXr5MjjAMA+T7lCHEGoCAzc1NODk5+TIYpd/vy2EC3ueiIPygWlC32wXOeUG1FDWg0jAMpDatm7Dq5c4BlW5npGAFcBNWK+B9izovh4zxw5qQgNnZWWCMvTlXAQDA5zF+WAELUAmv1+vQ6XSkaZpAKR3sgh4fHz/8HNaEBDSbTWg2mzCuRWFF4EkYK+QnYawfCiCEDNLu5v8Bw1aKlNLTMEsshwDTNH+UdnWdZVlI04+A9fV1mJubA8aYrxVACAHOOSwtLakV0UGs7ut/q5KNRlCtym0AAAAASUVORK5CYII=" alt=""></button>
+      <button id="bArea" title="Площа" aria-label="Площа"><img src="data:image/png;base64,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" alt=""></button>
+      <button id="bPen" title="Малювати" aria-label="Малювати"><svg viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4.2-1L18 9.2a2.2 2.2 0 000-3.1l-.1-.1a2.2 2.2 0 00-3.1 0L5 15.8 4 20z"/><path d="M13.5 6.5l4 4"/></svg></button>
+    </div>
+  </div>
+  <div id="search">
+    <div id="res"></div>
+    <div id="sbox">
+      <input id="q" type="search" autocomplete="off" enterkeyhint="search" placeholder="Місто, село, координати">
+      <button id="sx" title="Очистити" aria-label="Очистити">×</button>
+      <button id="sgo" title="Шукати" aria-label="Шукати">Знайти</button>
+    </div>
+  </div>
+  <div id="status">завантаження…</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+/* ============ НАЛАШТУВАННЯ ============
+   Встав сюди посилання на свою карту з Google Мої карти (або лише mid).
+   Приклад: "https://www.google.com/maps/d/viewer?mid=1AbCdEfGhIjKlMnOpQrStUvWxYz"
+   Карта має бути відкрита: «Усі, хто має посилання». Якщо пусто — показується збережена копія.
+*/
+const MAP_LINK = "https://www.google.com/maps/d/viewer?mid=1E7cefbjfT33zErTQADATnyZ_SVChrJc";
+const HISTORY_DIR = "history/";   // папка з щоденними знімками карти (їх зберігає автоматизація GitHub)
+const BASE_SNAPSHOT_DATE = "2026-11-05";   // дата вбудованої копії (порожня, поки не збереже перший знімок автоматизація)
+const REFRESH_MINUTES = 5;   // як часто перевіряти оновлення
+// Шари, які увімкнені одразу (за частиною назви). Решту можна ввімкнути кнопкою шарів.
+const DEFAULT_ON = ["основний шар", "спец операції", "міста", "позиції"];
+/* ====================================== */
+
+const SNAPSHOT_B64 = "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz48a21sIHhtbG5zPSJodHRwOi8vd3d3Lm9wZW5naXMubmV0L2ttbC8yLjIiPjxEb2N1bWVudD48bmFtZT5VQU08L25hbWU+PC9Eb2N1bWVudD48L2ttbD4=";
+const ICONS = {"images/icon-2.png": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAA4CAYAAACohjseAAAFD0lEQVR42u2WTWxUVRTHz7nvzcxrmbaJSFrEj2iIiaTRkKpEEz8jMS6ILlAIsHajJu7UBZm4NUYFN6CJiRujbEwUlAgGpeHLDIhQUJ+BtqP9RCZt57253/e48D0zDtMWY3R1f5vmnp7/uXPPO+fcC+DxeDwej8fj8Xg8Ho/H4/F4/iVEhEQUEBG22iqVCmu1LaFj/1DH2nVtdlxqj6XsHTdbav1/6doTkh3gGlsn33bC1gUiujRN1wDABgA4hYgTWZA+znkfAFB3d/ev7UEQ0SVJshoRH5BSVhGxBgBQr9f7oijq6+rqIkTsqGs2m7cR0X2Mse8R8RIRISJSmqb3BkEwUKvVDiGiBACYmppa0dvb+wQiziLiidwXAJBz/iQAuCiKhhGRt2cyAABQSj2klBqVUu7XWo9xzjcCAAghdhtjJoUQR9uyFwAApGm6QSl1WSm1X2s9LoTYBADAOX9TKTVhrT3RaT8hxGZr7ZhS6jNjzLSUckdm36mUuiylPKS1Pn3lypUezvntWuvYGPOlUqompXwn23uNlPKk1vpbKeXBJEnuuaY68oWU8hsp5bvZYfdqrb8DAJiZmSkrpV4VQpzrdEAp5RdCiA8AALTWb2mtzwEAjIyMlIUQL1trL3YqNyHEMSHEa5lutxBipFardWmt65zzxzL7qJRyG+f8BSnlMABAs9l8RGvdrFarBaXUe1LKo4uVKMtLBQAgCILVzrnzRMQYYz8AwEoAgP7+/oQxNt+hBxwAgHPu5jAMzxARM8acd86VAQAGBweTMAzniai1LCkrK1BKPT01NfV2Fm8tY+z0wsJCn3MOoii6RETIGLvAGLt/YWHhw2Kx+AwAQBiGdxHRb0NDQ5YxNsQYC7KvfVwIsa71o7X3IBQKhSIAUBAEBeeczQ9jrQ3bWyhLkAEAAoBi/peyE3XSZYlhiGh7e3t/z8rseSLaUCwWB3t6elZkP64AAMgYCwEA+/v7EwBIshLc5ZzbiojOGNPlnKtrrV+JomhnGIYfEdH6P7cibJ9iYK0ViEjWWuWcC/OsZ1/LtQ4IRDR5YpxzChGJMSYYY8ESOkJEm2c4TdPNxWLxDaXUw4g41d3dXWCM2WazyRHRWWutMYYBAMzNza0tlUqfW2tfjKLo06x6QmPMgXK5fEZrvQsA7pyenu7Oq4S19pJz7hQibpmdnV0NAM865862TlzGWJQvarXamjRNN2WlfRwRt46Pj9+EiFuI6KfczzkXIuJfupmZmYFMR5zzjWEYfmytfb1cLishxLokScYAYC4Igm1zc3NriehBIvqaiAbK5fIRIjoVRdFXSqmharVaIKL9pVLppXq9fmsQBNuJ6NKePXv4366PvPGJaEBKedgY87OU8sjVq1dvyTNtjNnBOT+Qa2ZnZ58SQpwkIjY/P79SKXUw0w1PT0/f0TK4nlNKHcx1jUbjUaVUFQCw2Wy+b60dM8YMW2svWGsPVyoV1mg0HtdaXzDGXBZC7M0Gy3Zr7aQx5pgx5qzW+sckSdbHcVxSSn2itf5Fa11tNBp3L3sXT05Ormq/UCuVCtu3b1+w1AUcx/GqTi+cTro8ZrVaLdRqta44jksjIyPF/H+Z/YbWGJVKJRwdHY3iOC7FcVxqjTsxMXFjNheWfaZh3lfLvRIWO+j1vmSu54WzXKxs70X9cTFR3qQdJicttr5eXatfexLb7a3xFvNdzN/j8Xg8Ho/H4/F4PB6Px+P5T/gDeFgEC1J2zc4AAAAASUVORK5CYII=", "images/icon-1.png": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAA4CAYAAACohjseAAAFD0lEQVR42u2WXYhVVRSA19rnnPs3M45OozMmIhM+ZAzYgygFZRYFQYYP9qP5Fj1F0GM91CWIXop+7MmioKdIkCA1BJORtFFkJM2b1YCOcyfvnZy43J/zs3/P6qFz5Hi9M05EPe3vba2z1l4/Z6+9N4DFYrFYLBaLxWKxWCwWi8Vi+ZcQERKRQ0SY1ZXLZZbVLeHH/qEf6/br0uNSMRazXTTYUvL/5dedaFLYbbrlxHazAiLGQRCsA4CtURSdQ8TridNgFEWDRBT39fX93p0oIsa+74+6rvtAGIbnEbEKANBoNAYLhcJgsVgkRJzr5ddoNDbk8/ktSqkLiHiFiBARKQiCLY7jjFar1eOIKAAA6vV636pVqx6L43gBEc8ktnG73d7kOM59pVJpEhHrvTrpAABIKR+SUs5IKQ8rpa75vv8EAEAYhvuVUjUhxPdd3XMAAFqt1jYhxFUhxBGl1CznfCcAQBRF70kprxtjziQF3RKPc75ba31NCPGN1npeCLEv0b8hpbzKOT+ulDq/sLAwEEXRmFJqWkr5rZSyKoT4EABACPG2lPKPNHYYhttv+5OpIIQ4KYT4OCn2gFLqHABApVLpl1K+JqX8qVeBUsqjUsrPkzXeT+0qlUo/5/xVY8zlXttNCHGac/46AIBSar+UslKtVotKqUYURTsS/UwYhnuDIHhZCHEqafh2pVRnZmZmpZTyM87500keh7TWh5M4LgAAS7cKAIDrumsR8VJS8EVEHAIAGB8f9xljrTiOu2cgBgCI43g9APxIRCyO40tE1J/6ua7bIqLstiREpKTAXfl8/oNkvY2IONVutweJCAqFwhUiQsbYz57nbfV9/wvO+a4kz3uJqAYAPJfLvZjP5yeVUjsRcYRzfihN8bYZBABijOUAgDzP84wxlBZjjOm2xaRBmv6uwEsWzSXyTb+0oExjGCKaFStW/Jls5ZeIaJvneeMDAwN9iY0LAMgYcwEAR0ZGfADwhRCbEfEjY8yesbExnjRqO2PsTQBYaYz5IQkV3/yDmeBgjOGISEopGcexk3YdAGLGWJw9IBBRp7PFGBOISETEGWM3/ZImxV1/0KRjEQTBbtd135VSPoyI9VKp5DHGTBiGHBFjY4zRWiMAQLPZ3AgAR7TWrxQKha+JiNVqtdWFQuFQLpfbbIz5qlgsfpL5AcCysxTH8Tkiev7GjRtrGWPPENGFNDHHcVwiKqRytVpdxzl/Kkl6koj2zM7O3u267nNE9GumIAcAiqnc6XRGgiDYCQAURdHjnud9aYx5q7+/XxLRpuHh4RkiajmOs7fZbG4kogeJ6AQRjZZKpZMAcJZzflwIcf/c3Fx+aGjomBDinXq9voYxthkAmtkCbxl83/dHhRDfKaV+E0JMhGG4PnM37Yui6GjqU6vVnuScnyUi1mq17pJSHkv8Ts3Pz9+TObie1VofyxT4iJRyCgAwDMNPtdazSqnTxpjLUsoTRMSiKNqhta5ora9yzg8k67xgjKkppSa11he11r90Op3xKIoeVUpVtNaXhRAnG43Ghl735i3UarXV3RdquVxmBw8edJa6gNvt9nCvF04vv3TNqakpr1qtFqenp/OVSiWXfkv0Q5k4rFwuu6ntxMREId155XKZ1ev1Nct9pmE6V3d8+ixS6HJfMst54dxprWzz0qdh90nYM+HsyddlT4vJy/XL2nU3sVvf4wRelq3FYrFYLBaLxWKxWCwWi8Xyn/EXKtYSxf6yldcAAAAASUVORK5CYII=", "images/icon-4.png": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAA4CAYAAACohjseAAAFEUlEQVR42u2WX4hUdRTHz/nde2dnd3Yd1nZb/yCVWCRsBBWKD/2xKCgSfDAr9SnwqR6CXuohLvvQS0qhPUkQ+FCBEERpCCq7pLkmK2mOay34Z6d2JpwYZ9Y79/f/nh66dxvHdV0Revp9YB5+Z37fc+acOb/f7wA4HA6Hw+FwOBwOh8PhcDgcjnuEiJCIPCLCdlsYhqzdtoCO3aWOdeo67LhQDADAdG/2wYWSYwut/y9d549ME7vFtpgYfvsCEZNWq7USANZxzk8j4kzqrMg5LxJRUigU/ux0gohJFEXLfN/fEMfxGUQsAwDU6/ViPp8vAgD19PT8MZ+uXq8/0NXV9ZTW+iwiXiIiRERSSj2ZJMnycrl8BBElAEC1Wi309/e/kCRJDRHHAQBmZmZ6isXiI4yxbgBAKWWlv7//auYnq4YHAKCUelopdUUp9b3W+moURS8BAMRxvFdrXZFS/thevUzXbDbXSykvSykPaq2nhRCbAAA457uVUjPW2vE0oZviCSG2GGOuSim/M8b8JaXckdo/1FpfEkIc0VqfqdVqfZzzh7TWU0qpH5RSZa31HgCAKIpesdZKY8zP1trJZrP5XnuMm1pDSjkmpfwsTXaf1vo0AECpVOpVSr2vlPp1vgSVUoeUUl8AAGitP8n2lUqlXiHEu9bayfnaTUp5QgjxQarbq5QqlcvlbqVUnXO+MbVfieN4W6vVeltKeTwt+LNaax6GIeOc75RS/nS7FmVZqwAA+L6/HBHPpwmfQ8SlAADDw8MRY6yZJEnnGUgAAJIkWQUAvxARM8acJ6LeTOf7fpOI2tuSstaRUm6uVqufpv7WIOLE7OxsEQAgn89fIiJkjF0IgmBdFEX7hRCb09/5KADMjIyMEGPsQcbYWiHEUaXUl0S0tL2Ifue5B4AcAFAQBIG1lrJkrLWdezEtkKF/Mwgyfbqe082dhf8KwxDRLlmy5O+0lXcS0fogCIb7+voK6R4/jREwxnBoaCgCgEhK+Tgi7rHWbgcAstbWEfGo53lfIeIurfXuXC73VtpdtvMWAyISiEhaa5UkiZdV3fO8hDGWtF8QiGiys8UYk4hIRCQYY3O6tEhJxz9os2PRarW2+L6/Syn1DCJWe3p6AsaYjeNYIGJirTXGGAQAaDQaawDgoDHmnXw+/w0R4fXr1/fncrmtQRB8K4T4iDH2fBrHzrVodpaSJDlNRG9cu3ZtOWPsNSI6237jElE+W5TL5ZVCiFdTZyeJ6M3p6ekVvu+/TkS/Zfs8z/MAoDtb37hxY6jVam0CAOKcvxgEwdfW2pHe3l5FRGsHBgauEFHT87xtjUZjDWNsAxEdI6JlhUJhDABOEdERInpibGzMGxwc/FgpdahWq60IgmBrkiQXbnmCsp6NomiZlPKo1vp3KeVoHMer2t6mHZzzQ5mmUqm8LIQ4RUSs2Wzep5Q6nOqONxqN1W0X11ZjzOG2BJ9TSk0AAMZx/LkxZlprfcJaO6mUOkZEjHO+0RhTMsZcFkLsS/1st9ZWtNYnjTHnjDEX6/X6Y0KIh7XW41rri1rrcc756ju+xZVKZbDzQQ3DkB04cMBb6AGenZ0dmG/CmU+X+ZyYmAjK5XL31NRUV6lUymXfpfalbXFYGIZ+tnd0dDTf/hRUq9X7FzumYXauFjstdCa62ElmMRPOnXyFYXj3U9QCieFC68Xq5pkvcZ4i4e1GtnsZ3RwOh8PhcDgcDofD4XA4HI575h//Rh2/0AyvewAAAABJRU5ErkJggg==", "images/icon-3.png": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAA4CAYAAACohjseAAAE40lEQVR42u2WTYhcRRDHq/q9mdlMZhM0gU2M2aDmoHExQsCQgx85KAiJGoxGYm7iKQh6U0RG8egXJqcgCN5kwUOIkaCGEY1r1A2aZI06kI8d2B1JdmdnZ95Hd9frLg95Lzwns+vG4K1/MAxd7/2rq6q7XxeAw+FwOBwOh8PhcDgcDofD4bhJmBmZ2WNmzNuq1arI2xbRiRvUiV5djx0Xm6NX82/JiRsS/E+63oKkiV1n+08rGIbhujAMd83MzKzLOVsZRdEwM9++kC4IgjVSyl2tVms4s7VarUy3fiFdFEUbpJRPt9vtu/KBh2G4JQiCHfV6vZS922w2l0spn4iiaFs+8ezX7XbvazQay/pV0gMA0Fo/qLW+qLU+QkSXgiB4LA3iABFNK6W+zQeR6cIw3Kq1Pq+UOkJEk1LKnQAAcRy/q7WeMsb80G8+KeVuY8wlrfVhIvpLKbUvne8NpdQFpdRXWutTV65cGYzj+A4iqmutv1BKNeI4/iD1VUhjf52ZWSl173W7IxsQ0TdKqYOp4BAR/QQAMDExUZFSviqlPNMvQa31USnlxwAASqn3tdZncrqXjTHn+m03pdT3UsrX0rkPaK0nGo3GMiJqxXG8PbVfjKJobxiG+6WUJ9ICPExE3ampqdUAAJ1OZ5PWum2M6TLz5nxOAgAAEW36vxYRzzKzEEKcBoBVAAAjIyOB7/vzfc6ABQAwxqwXQvzCzMJae5aZK3kdM1/TISIjIqcJPtlsNrOV2IiIpzqdzkpmhoGBgfPMjIh4rlQqPRAEwSezs7NPpT7usdY2jTHh6OioVyqVDiZJ8h4zTxFROR+nnx8gIgBAEQDY87yCtdZkyRhj/J6djWmBEgBgACik/0VOM2JmJKKC53m9hRGIaFasWDGTbuUXmXlroVAYGRwcXG6txdQfep7nJUkihoaGgqtHPdjsed6HiLh3eHg4llK+wsxT5XL57SRJ9ltrZ/NB9n7FgJklIjIRaWutn1UdAKwQwuaKYRExyRVGIyILIaQQwst0zGw5t4TpCppsC4VhuNv3/Xe01g8hYrNcLheEEDaKohgRrTHGWHt12na7vbFYLH5ujHmpUCh81mq1Vgoh3kTEu5VShxHxFkQ82O12hxDRMjOK/FlKkuRHRNxz+fLltUKIZ6y1v2aBeZ7nM/NANm40GuuklDvSoMcQ8bnJycnbEHEPM/+RS8gDgGtfwm63OxSG4U4A4DiOH/V9/1NjzFuVSkUz86YgCC4h4pzneXvb7fZGANjGzMeZeU2lUqkBwEkA+FIpdb+UskhELxSLxUOIOMbMIIT4OQiC4B/XSHbwgyBYo5T6moj+VErVoihan7ub9sVxfDTTTE9PPx7H8UlmFvPz86u01sdS3XftdvvOTKeUelZrfSzTzc3NPaK1HgcAjKLooyRJJonohDHmXJIkx5lZxHG8nYh+S5LkgpTyUOrneWPMNBGNJUlymoh+D8NwS+a3Vqv5RDTWarU2/Otd3Ol0VvdeqNVqVYyOjnqLXcB5XW/30e+SrlarYnx8vNBoNJbV6/XSxMREMXuW2m/N+RDVatXP3q3VagO5bsdjZq9Wq/m9c8FCASPikruF3kSX2skspcO5WV8LBrzAI1xsvFRdn/4S+xQJF2rZ+j27qfbN4XA4HA6Hw+FwOBwOh8PhuBH+BnKAGjSzkvIhAAAAAElFTkSuQmCC", "images/icon-6.png": "data:image/png;base64,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", "images/icon-5.png": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAA4CAYAAACohjseAAABxElEQVR42u2XMUvDQBiG34hDQQdBOpnBqZNDxkqLTnUzo4s3OvRP9Bfc6GhXf4Gd6lQdXB0KBy4VGrlBioVULFT4HJI2ibQ0SgIX/R44yB3vHffwhcsFYBiGYRiGYRiGYRiG+X8QUYOIrohIEZEfNhWONYosViGiHq2nR0SVwlVtNpv5lJIw2yhM5ZJyH0Rvl0SDKpHaDtqgGozRx3fJzCtp5SDYA3AEAPj0AO8UmD4uD5ccwL4BNu35yJ1lWcfGCoavWTfoTYHnw9Vyccn9BwCl+ciJZVm3We1pI+MCni2exu31ckCQGbeXr2GgYD0SvE4/K5mtmyxoR5Xpp5+VzNomCxpHpoKTyWQcHR4H6SfGsok1TBP0PE8tOjvn6SfGsok1TBPsdDr30aYvgk/A2uo5QXbZGgbiaK370fVkSDRwiBSWt4ETZEK01n0AjsmCZSFE87dXNSFEE0DZ9IOrJqVs/fSyLaVsAagV4WQuA3CFEM3E67oCrXU/rJxbhOolJAG4UsqWUqrr+/5w/sPr+/5QKdUNq+bmKWflLFkBsLsmNwLwBOC1aIJx0T0AWzHZEYB3AC95iTEMwzAMwzAMwzDMn+YLTN3iBOCbWsQAAAAASUVORK5CYII=", "images/icon-7.png": "data:image/png;base64,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"};
+
+const midFromLink = s => { const m = /mid=([^&#\s]+)/.exec(s || ""); return m ? m[1] : (s && /^[\w-]{20,}$/.test(s) ? s : ""); };
+const MAP_ID = midFromLink(new URLSearchParams(location.search).get("mid") || MAP_LINK);
+
+/* ---------- МОВИ: українська / English / русский ---------- */
+const I18N = {
+  uk: {
+    code: "UK", locale: "uk-UA", acceptLang: "uk,ru;q=0.8,en;q=0.6",
+    lang_title: "Мова", search_ph: "Місто, село, координати", find: "Знайти", clear: "Очистити", line: "Лінія", area: "Площа",
+    b_road: "Схема", b_osm: "Схема (OSM)", b_sat: "Супутник", b_dark: "Темна", borders: "Кордони країн", names_beta: "Назви мовою інтерфейсу (бета)",
+    tilewarn: "Фон карти (схема/супутник) не завантажується. Відкрий <b>index.html</b> у звичайному браузері (Chrome/Safari) або з хостингу, а не в перегляді всередині додатка. Лінії та позначки карти при цьому працюють.",
+    st_loading: "завантаження…", st_snapshot: "збережена копія карти", st_google_loading: "завантаження з Google…",
+    st_ok: t => "Google Мої карти · перевірено " + t, st_updating: "оновлення…", st_fail: "не вдалося оновити · показано збережену копію", st_reload: "оновити",
+    m: "м", km: "км", ha: "га", km2: "км²", m2: "м²",
+    hint_line: "Торкайся карти, щоб ставити точки лінії", hint_area: "Торкайся карти, щоб ставити кути ділянки",
+    len: "Довжина", pts: "точок", add_more: n => "Постав ще " + n + " " + (n === 1 ? "точку" : "точки"), area_l: "Площа", perim: "Периметр",
+    coords: "Координати", go_coords: "Перейти на ці координати", h_places: "Міста й села", h_mine: "Об'єкти твоєї карти",
+    searching: "Шукаю міста й села…", nothing: "У світі нічого не знайдено. Спробуй іншу назву або додай область, наприклад «Балаклія Харківська».",
+    err: "Не вдалося виконати пошук. Перевір інтернет і спробуй ще раз.",
+    types: { city: "Місто", town: "Місто / селище", village: "Село", hamlet: "Хутір", suburb: "Район міста", neighbourhood: "Мікрорайон", municipality: "Громада",
+      county: "Район", state: "Область", isolated_dwelling: "Садиба", locality: "Місцевість", quarter: "Квартал", borough: "Район міста",
+      city_district: "Район міста", administrative: "Адмінодиниця", farm: "Ферма", allotments: "Садове товариство", geo_city: "Місто", geo_place: "Населений пункт" }
+  },
+  en: {
+    code: "EN", locale: "en-US", acceptLang: "en,uk;q=0.8,ru;q=0.6",
+    lang_title: "Language", search_ph: "City, village, coordinates", find: "Search", clear: "Clear", line: "Line", area: "Area",
+    b_road: "Map", b_osm: "Map (OSM)", b_sat: "Satellite", b_dark: "Dark", borders: "Country borders", names_beta: "Names in interface language (beta)",
+    tilewarn: "The map background (map/satellite) is not loading. Open <b>index.html</b> in a regular browser (Chrome/Safari) or from a web host, not in an in-app viewer. Lines and markers of the map still work.",
+    st_loading: "loading…", st_snapshot: "saved copy of the map", st_google_loading: "loading from Google…",
+    st_ok: t => "Google My Maps · checked " + t, st_updating: "updating…", st_fail: "update failed · showing the saved copy", st_reload: "refresh",
+    m: "m", km: "km", ha: "ha", km2: "km²", m2: "m²",
+    hint_line: "Tap the map to add points of the line", hint_area: "Tap the map to add corners of the area",
+    len: "Length", pts: "points", add_more: n => "Add " + n + " more point" + (n === 1 ? "" : "s"), area_l: "Area", perim: "Perimeter",
+    coords: "Coordinates", go_coords: "Go to these coordinates", h_places: "Cities and villages", h_mine: "Objects on your map",
+    searching: "Searching cities and villages…", nothing: "Nothing found. Try another name or add the region, e.g. “Balakliia Kharkiv”.",
+    err: "Search failed. Check your connection and try again.",
+    types: { city: "City", town: "Town", village: "Village", hamlet: "Hamlet", suburb: "City district", neighbourhood: "Neighbourhood", municipality: "Municipality",
+      county: "District", state: "Region", isolated_dwelling: "Homestead", locality: "Locality", quarter: "Quarter", borough: "City district",
+      city_district: "City district", administrative: "Administrative unit", farm: "Farm", allotments: "Allotments", geo_city: "City", geo_place: "Settlement" }
+  },
+  ru: {
+    code: "RU", locale: "ru-RU", acceptLang: "ru,uk;q=0.8,en;q=0.6",
+    lang_title: "Язык", search_ph: "Город, село, координаты", find: "Найти", clear: "Очистить", line: "Линия", area: "Площадь",
+    b_road: "Схема", b_osm: "Схема (OSM)", b_sat: "Спутник", b_dark: "Тёмная", borders: "Границы стран", names_beta: "Названия на языке интерфейса (бета)",
+    tilewarn: "Фон карты (схема/спутник) не загружается. Открой <b>index.html</b> в обычном браузере (Chrome/Safari) или с хостинга, а не во встроенном просмотре приложения. Линии и метки карты при этом работают.",
+    st_loading: "загрузка…", st_snapshot: "сохранённая копия карты", st_google_loading: "загрузка из Google…",
+    st_ok: t => "Google Мои карты · проверено " + t, st_updating: "обновление…", st_fail: "не удалось обновить · показана сохранённая копия", st_reload: "обновить",
+    m: "м", km: "км", ha: "га", km2: "км²", m2: "м²",
+    hint_line: "Касайся карты, чтобы ставить точки линии", hint_area: "Касайся карты, чтобы ставить углы участка",
+    len: "Длина", pts: "точек", add_more: n => "Поставь ещё " + n + " " + (n === 1 ? "точку" : "точки"), area_l: "Площадь", perim: "Периметр",
+    coords: "Координаты", go_coords: "Перейти к этим координатам", h_places: "Города и сёла", h_mine: "Объекты твоей карты",
+    searching: "Ищу города и сёла…", nothing: "Ничего не найдено. Попробуй другое название или добавь область, например «Балаклея Харьковская».",
+    err: "Не удалось выполнить поиск. Проверь интернет и попробуй ещё раз.",
+    types: { city: "Город", town: "Город / посёлок", village: "Село", hamlet: "Хутор", suburb: "Район города", neighbourhood: "Микрорайон", municipality: "Община",
+      county: "Район", state: "Область", isolated_dwelling: "Усадьба", locality: "Местность", quarter: "Квартал", borough: "Район города",
+      city_district: "Район города", administrative: "Админединица", farm: "Ферма", allotments: "Садовое товарищество", geo_city: "Город", geo_place: "Населённый пункт" }
+  }
+};
+Object.assign(I18N.uk, {
+  pen: "Малювати", redo: "Вперед", palette: "Палітра кольорів", custom_color: "Свій колір", fullscreen: "На весь екран", t_free: "Вільна лінія", t_rect: "Чотирикутник", t_circle: "Коло", t_arrow: "Стрілка", t_erase: "Гумка (торкнись фігури)", color: "Колір", w_thin: "Тонка", w_mid: "Середня", w_thick: "Товста", undo: "Назад", clear_all: "Очистити",
+  cal_title: "Календар змін", day_prev: "Попередній день", day_next: "Наступний день", live: "LIVE", q_today: "Сьогодні", q_yday: "Вчора", q_week: "Тиждень тому", q_month: "Місяць тому",
+  cal_none: f => "Архів починається з " + f + ". Раніших версій немає.", cal_fail: "Не вдалося завантажити цю версію карти.",
+  cal_saved: x => "Показано збережену версію від " + x, cal_legend: "● — дні, коли на карті були зміни", cal_nofile: "Архів змін ще не підключений: показано лише вбудовану копію.",
+  st_archive: (d, sv) => "Архів: карта на " + d + (sv !== d ? " (версія від " + sv + ")" : ""), st_back: "до сьогодні"
+});
+Object.assign(I18N.en, {
+  pen: "Draw", redo: "Redo", palette: "Color palette", custom_color: "Custom color", fullscreen: "Full screen", t_free: "Freehand", t_rect: "Rectangle", t_circle: "Circle", t_arrow: "Arrow", t_erase: "Eraser (tap a shape)", color: "Color", w_thin: "Thin", w_mid: "Medium", w_thick: "Thick", undo: "Undo", clear_all: "Clear",
+  cal_title: "Change calendar", day_prev: "Previous day", day_next: "Next day", live: "LIVE", q_today: "Today", q_yday: "Yesterday", q_week: "A week ago", q_month: "A month ago",
+  cal_none: f => "The archive starts on " + f + ". There are no earlier versions.", cal_fail: "Could not load this version of the map.",
+  cal_saved: x => "Showing the saved version from " + x, cal_legend: "● — days when the map changed", cal_nofile: "The change archive is not connected yet: only the built-in copy is shown.",
+  st_archive: (d, sv) => "Archive: map on " + d + (sv !== d ? " (version from " + sv + ")" : ""), st_back: "back to today"
+});
+Object.assign(I18N.ru, {
+  pen: "Рисовать", redo: "Вперёд", palette: "Палитра цветов", custom_color: "Свой цвет", fullscreen: "На весь экран", t_free: "Свободная линия", t_rect: "Четырёхугольник", t_circle: "Круг", t_arrow: "Стрелка", t_erase: "Ластик (коснись фигуры)", color: "Цвет", w_thin: "Тонкая", w_mid: "Средняя", w_thick: "Толстая", undo: "Назад", clear_all: "Очистить",
+  cal_title: "Календарь изменений", day_prev: "Предыдущий день", day_next: "Следующий день", live: "LIVE", q_today: "Сегодня", q_yday: "Вчера", q_week: "Неделю назад", q_month: "Месяц назад",
+  cal_none: f => "Архив начинается с " + f + ". Более ранних версий нет.", cal_fail: "Не удалось загрузить эту версию карты.",
+  cal_saved: x => "Показана сохранённая версия от " + x, cal_legend: "● — дни, когда на карте были изменения", cal_nofile: "Архив изменений ещё не подключён: показана только встроенная копия.",
+  st_archive: (d, sv) => "Архив: карта на " + d + (sv !== d ? " (версия от " + sv + ")" : ""), st_back: "к сегодня"
+});
+let LANG = "uk";
+try { const v = localStorage.getItem("awm_lang"); if (I18N[v]) LANG = v; } catch (e) { /* без збереження */ }
+const T = (k, ...a) => { const v = I18N[LANG][k] !== undefined ? I18N[LANG][k] : I18N.uk[k]; return typeof v === "function" ? v(...a) : v; };
+const typeName = k => (I18N[LANG].types[k] || I18N.uk.types[k] || "");
+
+/* Назви груп твоєї карти (шарів) іншими мовами. Невідомі назви лишаються як є. */
+const FOLDER_I18N = {
+  "Генштаб РФ та ЗСУ": { en: "General Staffs of RF and AFU", ru: "Генштаб РФ и ВСУ" },
+  "Мілітарі": { en: "Military", ru: "Милитари" },
+  "Лінія фронту по роках": { en: "Front line by year", ru: "Линия фронта по годам" },
+  "Міста й містечка": { en: "Cities and towns", ru: "Города и городки" },
+  "Основний шар мапи (наша карта)": { en: "Main map layer (our map)", ru: "Основной слой карты (наша карта)" },
+  "Спец операції на території РФ і наступи з 2022": { en: "Special operations in Russia and offensives since 2022", ru: "Спецоперации на территории РФ и наступления с 2022" },
+  "Позиції і прапори": { en: "Positions and flags", ru: "Позиции и флаги" }
+};
+const folderLabel = name => { const k = name.trim(), f = FOLDER_I18N[k]; return (f && f[LANG]) || k; };
+
+/* ---------- карта ---------- */
+const map = L.map("map", { preferCanvas: true, zoomControl: false, attributionControl: false, doubleClickZoom: true, worldCopyJump: true })
+  .setView([48.4, 34.5], 6);
+L.control.zoom({ position: "bottomright" }).addTo(map);
+const FS_IN = '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+const FS_OUT = '<svg viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
+const FsControl = L.Control.extend({
+  options: { position: "bottomright" },
+  onAdd() {
+    const b = L.DomUtil.create("button", "", L.DomUtil.create("div", "leaflet-bar"));
+    b.id = "fsBtn"; b.type = "button"; b.innerHTML = FS_IN;
+    L.DomEvent.disableClickPropagation(b.parentNode);
+    return b.parentNode;
+  }
+});
+new FsControl().addTo(map);
+L.control.scale({ position: "topleft", imperial: false }).addTo(map);
+
+const tl = (url, attr, extra) => L.tileLayer(url, Object.assign({ maxZoom: 19, attribution: attr, crossOrigin: false }, extra || {}));
+const baseLayers = {
+  road: tl("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", "© OpenStreetMap, © CARTO", { subdomains: "abcd" }),
+  osm: tl("https://tile.openstreetmap.org/{z}/{x}/{y}.png", "© OpenStreetMap"),
+  sat: tl("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", "Esri, Maxar"),
+  dark: tl("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", "© OpenStreetMap, © CARTO", { subdomains: "abcd" })
+};
+baseLayers.sat.addTo(map);
+
+/* Якщо плитки не вантажаться — показати зрозуміле повідомлення */
+let tileOk = 0, tileBad = 0;
+Object.values(baseLayers).forEach(l => { l.on("tileload", () => { tileOk++; hideTileWarn(); }); l.on("tileerror", () => { tileBad++; }); });
+const warn = document.createElement("div");
+warn.id = "tilewarn";
+document.body.appendChild(warn);
+function hideTileWarn() { warn.style.display = "none"; }
+setInterval(() => { if (tileOk === 0 && tileBad >= 3) warn.style.display = "block"; }, 2500);
+/* ---------- Підписи карти (країни, області, міста, села, моря) та кордони — мовою інтерфейсу ----------
+   Малюються з векторних даних OpenFreeMap (OpenStreetMap): для кожного підпису береться назва name:uk / name:ru / name:en.
+   Якщо векторні дані не завантажились — запасний варіант: готові англомовні тайли Esri. */
+const LABEL_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+const borders = tl("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", "Esri", { maxZoom: 19 });
+borders.addTo(map);                                           // кордони й назви (Esri) — увімкнені одразу, як раніше
+map.createPane("labels"); map.getPane("labels").style.zIndex = 250; map.getPane("labels").style.pointerEvents = "none";
+
+function labelNameExpr(lang) {
+  return lang === "en"
+    ? ["coalesce", ["get", "name:en"], ["get", "name:latin"], ["get", "name"]]
+    : ["coalesce", ["get", "name:" + lang], ["get", "name"], ["get", "name:en"]];
+}
+/* Лишаємо зі стилю лише підписи місць, назви морів та лінії кордонів; решту (дороги, води, будівлі) викидаємо */
+function buildLabelStyle(st, lang) {
+  const layers = [], ids = [], used = new Set();
+  (st.layers || []).forEach(l => {
+    const sl = l["source-layer"];
+    if (l.type === "symbol" && (sl === "place" || sl === "water_name")) {
+      const n = JSON.parse(JSON.stringify(l));
+      n.layout = n.layout || {};
+      delete n.layout["icon-image"];
+      n.layout["text-field"] = labelNameExpr(lang);
+      n.paint = { "text-color": "#ffffff", "text-halo-color": "rgba(8,20,32,0.88)", "text-halo-width": 1.7, "text-halo-blur": 0.4 };
+      layers.push(n); ids.push(n.id); used.add(n.source);
+    } else if (l.type === "line" && sl === "boundary") {
+      const n = JSON.parse(JSON.stringify(l));
+      n.paint = Object.assign({}, n.paint, { "line-color": "#f1f3f5", "line-opacity": 0.85 });
+      layers.push(n); used.add(n.source);
+    }
+  });
+  const sources = {};
+  Object.keys(st.sources || {}).forEach(k => { if (used.has(k)) sources[k] = st.sources[k]; });
+  return { style: { version: 8, sources, glyphs: st.glyphs, layers }, ids };
+}
+const LabelsLayer = L.Layer.extend({
+  onAdd(m) {
+    this._map = m; this._ready = false; this._errors = 0; this._ids = [];
+    this._div = L.DomUtil.create("div", "gl-labels", m.getPane("labels"));
+    this._div.style.pointerEvents = "none";
+    m.on("move zoom moveend zoomend viewreset", this._sync, this);
+    m.on("resize", this._onResize, this);
+    m.on("zoomanim", this._onZoomAnim, this);
+    this._sync();
+    this._start();
+  },
+  onRemove(m) {
+    m.off("move zoom moveend zoomend viewreset", this._sync, this);
+    m.off("resize", this._onResize, this);
+    m.off("zoomanim", this._onZoomAnim, this);
+    clearTimeout(this._timer);
+    if (this._gl) { try { this._gl.remove(); } catch (e) { /* ігноруємо */ } this._gl = null; }
+    L.DomUtil.remove(this._div); this._div = null;
+  },
+  _sync() {
+    if (!this._div) return;
+    const m = this._map, sz = m.getSize();
+    this._div.style.width = sz.x + "px"; this._div.style.height = sz.y + "px";
+    L.DomUtil.setPosition(this._div, m.containerPointToLayerPoint([0, 0]));
+    if (this._gl) { const c = m.getCenter(); this._gl.jumpTo({ center: [c.lng, c.lat], zoom: m.getZoom() - 1 }); }
+  },
+  _onResize() { this._sync(); if (this._gl) this._gl.resize(); },
+  _onZoomAnim(e) { if (this._gl) this._gl.jumpTo({ center: [e.center.lng, e.center.lat], zoom: e.zoom - 1 }); },
+  async _start() {
+    try {
+      if (typeof maplibregl === "undefined") throw new Error("MapLibre не завантажився");
+      const r = await fetch(LABEL_STYLE_URL);
+      if (!r.ok) throw new Error(r.status);
+      if (!this._div) return;                                  // шар вимкнули, поки вантажився стиль
+      const built = buildLabelStyle(await r.json(), LANG);
+      if (!built.ids.length) throw new Error("у стилі немає підписів");
+      this._ids = built.ids;
+      const m = this._map, c = m.getCenter();
+      this._gl = new maplibregl.Map({ container: this._div, style: built.style, center: [c.lng, c.lat], zoom: m.getZoom() - 1,
+        interactive: false, attributionControl: false, fadeDuration: 0, canvasContextAttributes: { antialias: false } });
+      this._gl.on("load", () => { this._ready = true; clearTimeout(this._timer); this._sync(); });
+      this._gl.on("error", () => { if (!this._ready && ++this._errors >= 3) this._fallback(); });
+      this._timer = setTimeout(() => { if (!this._ready) this._fallback(); }, 12000);
+    } catch (e) { this._fallback(); }
+  },
+  _fallback() {                                                // не вийшло — вимикаємо шар, кордони Esri повернуться самі
+    const m = this._map; if (!m) return;
+    if (this._gl) { try { this._gl.remove(); } catch (e) { /* ігноруємо */ } this._gl = null; }
+    m.removeLayer(this);
+  },
+  setLang() {
+    if (!this._gl || !this._ready) return;
+    this._ids.forEach(id => { try { this._gl.setLayoutProperty(id, "text-field", labelNameExpr(LANG)); } catch (e) { /* шару немає */ } });
+  },
+  setHidden(h) {                                               // для підложки OSM, на якій підписи вже намальовані
+    this._hidden = h;
+    if (this._div) this._div.style.display = h ? "none" : "";
+  }
+});
+const labelsLayer = new LabelsLayer();                         // за бажанням: назви мовою інтерфейсу (вмикається в меню шарів)
+// назви мовою інтерфейсу замінюють підписи Esri; якщо їх вимкнути (або вони не завантажаться) — Esri повертається
+map.on("overlayadd", e => { if (e.layer === labelsLayer && map.hasLayer(borders)) map.removeLayer(borders); });
+map.on("overlayremove", e => { if (e.layer === labelsLayer && !map.hasLayer(borders)) borders.addTo(map); });
+map.on("baselayerchange", e => labelsLayer.setHidden(e.layer === baseLayers.osm));
+
+let layersCtl = null;
+const folderLayers = new Map();   // назва -> L.featureGroup
+function rebuildLayersCtl() {
+  if (layersCtl) layersCtl.remove();
+  const bases = {};
+  bases[T("b_road")] = baseLayers.road; bases[T("b_osm")] = baseLayers.osm; bases[T("b_sat")] = baseLayers.sat; bases[T("b_dark")] = baseLayers.dark;
+  layersCtl = L.control.layers(bases, {}, { position: "bottomleft", collapsed: true }).addTo(map);
+  layersCtl.addOverlay(borders, T("borders"));
+  layersCtl.addOverlay(labelsLayer, T("names_beta"));
+  folderLayers.forEach((fg, name) => layersCtl.addOverlay(fg, esc(folderLabel(name))));
+}
+rebuildLayersCtl();
+
+/* ---------- парсер KML ---------- */
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const kids = (el, name) => Array.from(el.children).filter(c => c.localName === name);
+const kid = (el, name) => kids(el, name)[0] || null;
+const txt = (el, name) => { const k = el && kid(el, name); return k ? k.textContent.trim() : ""; };
+
+function kmlColor(c) {
+  if (!c || c.length !== 8) return null;
+  return { color: "#" + c.slice(6, 8) + c.slice(4, 6) + c.slice(2, 4), opacity: parseInt(c.slice(0, 2), 16) / 255 };
+}
+function readStyle(s) {
+  const o = {}, ls = kid(s, "LineStyle"), ps = kid(s, "PolyStyle"), is = kid(s, "IconStyle");
+  if (ls) o.line = { c: kmlColor(txt(ls, "color")), w: parseFloat(txt(ls, "width")) || 1 };
+  if (ps) o.poly = { c: kmlColor(txt(ps, "color")), fill: txt(ps, "fill") !== "0" };
+  if (is) { const ic = kid(is, "Icon"); o.icon = ic ? txt(ic, "href") : ""; }
+  return o;
+}
+function parseCoords(t) {
+  return t.trim().split(/\s+/).map(p => p.split(",")).filter(p => p.length >= 2).map(p => [parseFloat(p[1]), parseFloat(p[0])]);
+}
+function parseKml(text) {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.querySelector("parsererror")) throw new Error("KML parse error");
+  const styles = {}, smap = {};
+  doc.querySelectorAll("Style").forEach(s => { const id = s.getAttribute("id"); if (id) styles[id] = readStyle(s); });
+  doc.querySelectorAll("StyleMap").forEach(m => {
+    const id = m.getAttribute("id");
+    kids(m, "Pair").forEach(p => { if (txt(p, "key") === "normal") smap[id] = txt(p, "styleUrl").replace("#", ""); });
+  });
+  const resolve = u => { let id = (u || "").replace("#", ""); if (smap[id]) id = smap[id]; return styles[id] || {}; };
+
+  const root = doc.querySelector("Document") || doc.documentElement;
+  const groups = [];
+  const readPm = pm => {
+    const st = resolve(txt(pm, "styleUrl"));
+    const info = [];
+    pm.querySelectorAll("ExtendedData > Data").forEach(d => {
+      const v = txt(d, "value"); if (v) info.push([d.getAttribute("name"), v]);
+    });
+    let desc = "";
+    if (!info.length) {
+      const d = txt(pm, "description");
+      if (d) { const t = new DOMParser().parseFromString(d, "text/html").body.textContent.trim(); if (t) desc = t; }
+    }
+    const geoms = [];
+    pm.querySelectorAll("Point").forEach(g => { const c = parseCoords(txt(g, "coordinates")); if (c[0]) geoms.push({ t: "pt", c: c[0] }); });
+    pm.querySelectorAll("LineString").forEach(g => geoms.push({ t: "ln", c: parseCoords(txt(g, "coordinates")) }));
+    pm.querySelectorAll("Polygon").forEach(g => {
+      const rings = [];
+      const ob = kid(g, "outerBoundaryIs"); if (ob) rings.push(parseCoords(ob.querySelector("coordinates").textContent));
+      kids(g, "innerBoundaryIs").forEach(ib => rings.push(parseCoords(ib.querySelector("coordinates").textContent)));
+      geoms.push({ t: "pg", c: rings });
+    });
+    const key = txt(pm, "styleUrl").replace("#", "").replace(/-(nodesc|normal|highlight)/g, "");
+    return { name: txt(pm, "name"), info, desc, st, geoms, key };
+  };
+  const addGroup = (name, el) => {
+    const items = Array.from(el.querySelectorAll("Placemark")).map(readPm).filter(p => p.geoms.length);
+    if (items.length) groups.push({ name: (name || "Без назви").trim(), items });
+  };
+  kids(root, "Folder").forEach(f => addGroup(txt(f, "name"), f));
+  const loose = kids(root, "Placemark");
+  if (loose.length) { const wrap = { querySelectorAll: () => loose }; addGroup("Без групи", wrap); }
+  return groups;
+}
+
+/* ---------- відображення ---------- */
+const searchIdx = new Map();      // назва групи -> [{name, folder, ll, bounds, p}]
+function entryOf(p, folder) {
+  if (!p.name) return null;
+  const g = p.geoms[0]; let ll, bounds = null;
+  if (g.t === "pt") ll = L.latLng(g.c);
+  else { const pts = g.t === "pg" ? g.c[0] : g.c; if (!pts || !pts.length) return null; bounds = L.latLngBounds(pts); ll = bounds.getCenter(); }
+  return { name: p.name, folder, ll, bounds, p };
+}
+const hiddenByUser = new Set();
+let firstRender = true;
+
+const popupHtml = p => {
+  let h = '<div class="popup">' + (p.name ? "<h4>" + esc(p.name) + "</h4>" : "");
+  p.info.forEach(([k, v]) => { h += '<div><span class="k">' + esc(k) + ":</span> " + esc(v).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>') + "</div>"; });
+  if (p.desc) h += "<div>" + esc(p.desc) + "</div>";
+  return h + "</div>";
+};
+const busy = () => (mode && !finished) || penOn;
+
+/* Іконки: беремо з збереженої копії за кодом стилю (код+колір), бо Google у «живих» даних
+   віддає однакові сірі значки. Для нових типів значків малюємо кружечок потрібного кольору. */
+const ICON_BY_KEY = {};
+function learnIcons(groups) {
+  groups.forEach(g => g.items.forEach(p => { if (p.key && p.st.icon && ICONS[p.st.icon]) ICON_BY_KEY[p.key] = ICONS[p.st.icon]; }));
+}
+function iconFor(p) {
+  const known = ICON_BY_KEY[p.key];
+  if (known) return L.icon({ iconUrl: known, iconSize: [26, 26], iconAnchor: [13, 13] });
+  const hex = /-([0-9A-Fa-f]{6})$/.exec(p.key);
+  if (hex) return L.divIcon({ className: "", iconSize: [16, 16], iconAnchor: [8, 8],
+    html: '<div style="width:16px;height:16px;border-radius:50%;background:#' + hex[1] + ';border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.6)"></div>' });
+  const href = p.st.icon ? (ICONS[p.st.icon] || p.st.icon) : "";
+  return href ? L.icon({ iconUrl: href, iconSize: [26, 26], iconAnchor: [13, 13] }) : new L.Icon.Default();
+}
+
+function buildLayer(p) {
+  const out = [];
+  const bind = (lyr, p) => lyr.on("click", e => {
+    if (busy()) return;
+    if (!p.name && !p.info.length && !p.desc) return;
+    L.popup({ maxWidth: 300 }).setLatLng(e.latlng).setContent(popupHtml(p)).openOn(map);
+  });
+  p.geoms.forEach(g => {
+    let lyr;
+    if (g.t === "pt") {
+      lyr = L.marker(g.c, { icon: iconFor(p), bubblingMouseEvents: true });
+    } else if (g.t === "ln") {
+      const l = p.st.line || {}, c = l.c || { color: "#3388ff", opacity: 1 };
+      lyr = L.polyline(g.c, { color: c.color, opacity: c.opacity, weight: Math.max(1.5, l.w || 1.5) });
+    } else {
+      const l = p.st.line || {}, pl = p.st.poly || {};
+      const lc = l.c || { color: "#3388ff", opacity: 1 }, fc = pl.c || lc;
+      lyr = L.polygon(g.c, {
+        stroke: (l.w || 0) >= 0.5, color: lc.color, opacity: lc.opacity, weight: Math.max(1, l.w || 1),
+        fill: pl.fill !== false, fillColor: fc.color, fillOpacity: fc.opacity
+      });
+    }
+    bind(lyr, p); out.push(lyr);
+  });
+  return out;
+}
+
+function render(groups) {
+  const seen = new Set();
+  groups.forEach(gr => {
+    seen.add(gr.name);
+    let fg = folderLayers.get(gr.name);
+    if (!fg) {
+      fg = L.featureGroup();
+      folderLayers.set(gr.name, fg);
+      layersCtl.addOverlay(fg, esc(folderLabel(gr.name)));
+      fg.on("add", () => hiddenByUser.delete(gr.name));
+      fg.on("remove", () => hiddenByUser.add(gr.name));
+      const on = DEFAULT_ON.some(k => gr.name.toLowerCase().includes(k));
+      if (!on && firstRender) hiddenByUser.add(gr.name);
+      if (!hiddenByUser.has(gr.name)) fg.addTo(map);
+    }
+    const wasOn = map.hasLayer(fg);
+    fg.clearLayers();
+    const entries = [];
+    gr.items.forEach(p => { buildLayer(p).forEach(l => fg.addLayer(l)); const e = entryOf(p, gr.name); if (e) entries.push(e); });
+    searchIdx.set(gr.name, entries);
+    if (wasOn && !map.hasLayer(fg)) fg.addTo(map);
+  });
+  folderLayers.forEach((fg, name) => { if (!seen.has(name)) { map.removeLayer(fg); layersCtl.removeLayer(fg); folderLayers.delete(name); searchIdx.delete(name); } });
+  firstRender = false;
+}
+
+/* ---------- завантаження та автооновлення ---------- */
+const statusEl = document.getElementById("status");
+const hhmm = () => new Date().toLocaleTimeString(I18N[LANG].locale, { hour: "2-digit", minute: "2-digit" });
+let viewDate = null, viewSaved = null, liveStatus = ["st_loading"];
+let statusState = ["st_loading"];
+function hideBoot() { const b = document.getElementById("boot"); if (b) { b.classList.add("done"); setTimeout(() => b.remove(), 500); } }
+function renderStatus() {
+  if (viewDate) {
+    statusEl.innerHTML = T("st_archive", fmtDate(viewDate), fmtDate(viewSaved)) + ' <button id="reload">' + T("st_back") + "</button>";
+    document.getElementById("reload").onclick = () => goLive();
+    return;
+  }
+  statusEl.innerHTML = T(...statusState) + ' <button id="reload">' + T("st_reload") + "</button>";
+  document.getElementById("reload").onclick = () => refresh(true);
+}
+const setSt = (...st) => { statusState = st; renderStatus(); };
+
+function snapshotText() {
+  return new TextDecoder().decode(Uint8Array.from(atob(SNAPSHOT_B64), c => c.charCodeAt(0)));
+}
+async function fetchLive() {
+  if (!MAP_ID) return null;
+  const u = "https://www.google.com/maps/d/kml?mid=" + encodeURIComponent(MAP_ID) + "&forcekml=1&_=" + Date.now();
+  const one = async url => {
+    const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 20000);
+    try { const r = await fetch(url, { cache: "no-store", signal: ctl.signal }); if (!r.ok) throw new Error(r.status);
+          const x = await r.text(); if (!x.includes("<kml")) throw new Error("no kml"); return x; } finally { clearTimeout(to); }
+  };
+  try { return await Promise.any([u, "https://corsproxy.io/?url=" + encodeURIComponent(u), "https://api.allorigins.win/raw?url=" + encodeURIComponent(u)].map(one)); } catch (e) { /* усі шляхи не відповіли */ }
+  try {   // запасний шлях: копія з репозиторію, але ТІЛЬКИ якщо вона збережена саме з цієї карти
+    const ij = await (await fetch(HISTORY_DIR + "index.json", { cache: "no-store" })).json();
+    if (ij.mid === MAP_ID) {
+      const r = await fetch(HISTORY_DIR + "latest.kml.gz", { cache: "no-store" });
+      if (r.ok) { const x = await gunzip(await r.arrayBuffer()); if (x.includes("<kml")) return x; }
+    }
+  } catch (e) { /* немає архіву */ }
+  return null;
+}
+let lastSig = "";
+async function refresh(manual) {
+  if (manual) setSt("st_updating");
+  const live = await fetchLive();
+  if (live) {
+    const sig = live.length + ":" + live.slice(-200);
+    if (sig !== lastSig || manual) { try { const g = parseKml(live); liveGroups = g; if (!viewDate) render(g); lastSig = sig; } catch (e) { console.error(e); } }
+    setSt("st_ok", hhmm()); hideBoot();
+  } else if (MAP_ID) {
+    setSt("st_fail"); hideBoot();
+  }
+}
+const snapGroups = parseKml(snapshotText());
+let liveGroups = snapGroups;
+learnIcons(snapGroups);
+render(snapGroups);
+setSt(MAP_ID ? "st_google_loading" : "st_snapshot"); if (!MAP_ID) hideBoot();
+if (MAP_ID) {
+  refresh(false);
+  setInterval(refresh, REFRESH_MINUTES * 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(false); });
+}
+
+/* ---------- вимірювання ---------- */
+let mode = null, finished = false, pts = [];
+const mLayer = L.layerGroup().addTo(map);
+const readout = document.getElementById("readout");
+const $ = id => document.getElementById(id);
+
+const fmtLen = m => m < 1000 ? Math.round(m) + " " + T("m") : (m / 1000).toFixed(m < 10000 ? 2 : 1) + " " + T("km");
+const fmtArea = m2 => {
+  const km2 = m2 / 1e6, ha = m2 / 1e4;
+  if (m2 < 1e4) return Math.round(m2) + " " + T("m2");
+  if (km2 < 1) return ha.toFixed(1) + " " + T("ha");
+  return km2.toFixed(km2 < 100 ? 2 : 1) + " " + T("km2") + " (" + Math.round(ha).toLocaleString(I18N[LANG].locale) + " " + T("ha") + ")";
+};
+const rad = d => d * Math.PI / 180;
+function ringArea(ll) {
+  const R = 6378137, n = ll.length; let t = 0;
+  for (let i = 0; i < n; i++) { const a = ll[i], b = ll[(i + 1) % n]; t += rad(b.lng - a.lng) * (2 + Math.sin(rad(a.lat)) + Math.sin(rad(b.lat))); }
+  return Math.abs(t * R * R / 2);
+}
+const pathLen = (ll, closed) => { let s = 0; for (let i = 1; i < ll.length; i++) s += ll[i - 1].distanceTo(ll[i]); if (closed && ll.length > 2) s += ll[ll.length - 1].distanceTo(ll[0]); return s; };
+
+function drawMeasure() {
+  mLayer.clearLayers();
+  const col = "#0057b8";
+  if (mode === "line" && pts.length > 1) L.polyline(pts, { color: col, weight: 3, dashArray: "6 6", interactive: false }).addTo(mLayer);
+  if (mode === "area" && pts.length > 2) L.polygon(pts, { color: col, weight: 3, fillColor: col, fillOpacity: .2, interactive: false }).addTo(mLayer);
+  else if (mode === "area" && pts.length === 2) L.polyline(pts, { color: col, weight: 3, interactive: false }).addTo(mLayer);
+  pts.forEach(p => L.circleMarker(p, { radius: 5, color: col, weight: 2, fillColor: "#fff", fillOpacity: 1, interactive: false }).addTo(mLayer));
+  if (mode === "line") for (let i = 1; i < pts.length; i++) {
+    L.tooltip({ permanent: true, direction: "center", className: "seg", opacity: .9 }).setLatLng(L.latLngBounds(pts[i - 1], pts[i]).getCenter()).setContent(fmtLen(pts[i - 1].distanceTo(pts[i]))).addTo(mLayer);
+  }
+  let h = "";
+  if (!mode) h = "";
+  else if (!pts.length) h = mode === "line" ? T("hint_line") : T("hint_area");
+  else if (mode === "line") h = T("len") + ": <b>" + fmtLen(pathLen(pts)) + "</b> · " + T("pts") + ": " + pts.length;
+  else if (pts.length < 3) h = T("add_more", 3 - pts.length);
+  else h = T("area_l") + ": <b>" + fmtArea(ringArea(pts)) + "</b><br>" + T("perim") + ": " + fmtLen(pathLen(pts, true));
+  readout.innerHTML = h; readout.style.display = h ? "block" : "none";
+}
+/* Перше натискання — вмикає малювання, повторне натискання на ту саму кнопку — вимикає і прибирає виміри */
+function setMode(m) {
+  if (penOn) setPen(false);
+  mode = (mode === m) ? null : m;
+  pts = []; finished = false;
+  $("bLine").classList.toggle("on", mode === "line");
+  $("bArea").classList.toggle("on", mode === "area");
+  document.body.classList.toggle("measuring", !!mode);
+  mode ? map.doubleClickZoom.disable() : map.doubleClickZoom.enable();
+  map.closePopup(); drawMeasure();
+}
+map.on("click", e => { if (!mode) return; pts.push(e.latlng); drawMeasure(); });
+$("bLine").onclick = () => setMode("line");
+$("bArea").onclick = () => setMode("area");
+L.DomEvent.disableClickPropagation($("dock"));
+function placeControls() {
+  // шари та +/− стоять на рівні кнопок вимірювань, а коли відкрита панель малювання — над нею
+  const mapBottom = $("map").getBoundingClientRect().bottom;
+  const open = $("pen").classList.contains("open");
+  const ref = open ? $("pen").getBoundingClientRect().top - 8 : $("bar").getBoundingClientRect().bottom;
+  document.documentElement.style.setProperty("--bar-bottom", Math.max(0, Math.round(mapBottom - ref)) + "px");
+}
+new ResizeObserver(placeControls).observe($("dock"));
+window.addEventListener("resize", placeControls);
+placeControls();
+L.DomEvent.disableClickPropagation($("logo"));
+L.DomEvent.disableClickPropagation($("tr"));
+
+
+/* ---------- малювання (олівець) ---------- */
+let penOn = false, penTool = "free", penColor = "#e03131", penWidth = 4, cur = null;
+const shapes = [];                                   // {t, c, w, p:[[lat,lng],…], r, layer}
+const DRAW_KEY = "awm_draw_v1";
+const redoStack = [];
+map.createPane("draw"); map.getPane("draw").style.zIndex = 450;
+const drawRenderer = L.canvas({ pane: "draw", padding: 0.5 });
+const drawGroup = L.layerGroup().addTo(map);
+const rd = ll => [+ll.lat.toFixed(6), +ll.lng.toFixed(6)];
+function saveShapes() {
+  try { localStorage.setItem(DRAW_KEY, JSON.stringify(shapes.map(({ t, c, w, p, r }) => ({ t, c, w, p, r })))); } catch (e) { /* без збереження */ }
+}
+function arrowParts(a, b) {
+  const crs = L.CRS.EPSG3857, pa = crs.project(L.latLng(a)), pb = crs.project(L.latLng(b));
+  const ang = Math.atan2(pb.y - pa.y, pb.x - pa.x), len = Math.hypot(pb.x - pa.x, pb.y - pa.y), head = len * 0.25, sp = 0.5;
+  const wing = k => crs.unproject(L.point(pb.x - head * Math.cos(ang + k * sp), pb.y - head * Math.sin(ang + k * sp)));
+  return [[a, b], [wing(-1), L.latLng(b), wing(1)]];
+}
+function makeShapeLayer(sh) {
+  const o = { renderer: drawRenderer, color: sh.c, weight: sh.w, opacity: 1, lineCap: "round", lineJoin: "round", fillColor: sh.c, fillOpacity: 0.15 };
+  let l;
+  if (sh.t === "free") l = L.polyline(sh.p, Object.assign(o, { fill: false }));
+  else if (sh.t === "rect") l = L.rectangle([sh.p[0], sh.p[1]], o);
+  else if (sh.t === "circle") l = L.circle(sh.p[0], Object.assign(o, { radius: Math.max(sh.r, 1) }));
+  else l = L.polyline(arrowParts(sh.p[0], sh.p[1]), Object.assign(o, { fill: false }));
+  l.on("click", () => { if (penOn && penTool === "erase") removeShape(sh); });
+  return l;
+}
+function removeShape(sh, toRedo) {
+  const i = shapes.indexOf(sh); if (i < 0) return;
+  shapes.splice(i, 1); drawGroup.removeLayer(sh.layer); saveShapes();
+  if (toRedo) redoStack.push({ t: sh.t, c: sh.c, w: sh.w, p: sh.p, r: sh.r });
+  updatePenBtns();
+}
+function updatePenBtns() { $("pUndo").disabled = !shapes.length; $("pRedo").disabled = !redoStack.length; }
+function addShape(sh) { sh.layer = makeShapeLayer(sh); drawGroup.addLayer(sh.layer); shapes.push(sh); }
+try {
+  JSON.parse(localStorage.getItem(DRAW_KEY) || "[]").forEach(sh => { if (sh && sh.p && sh.p.length) addShape(sh); });
+} catch (e) { /* немає збережених малюнків */ }
+
+function dragState() {
+  const drawing = penOn && penTool !== "erase";
+  drawing ? map.dragging.disable() : map.dragging.enable();
+  document.body.classList.toggle("drawing", drawing);
+}
+function setPen(on) {
+  if (on && mode) setMode(mode);                      // вимикаємо вимірювання
+  penOn = on; cancelCur();
+  $("pen").classList.toggle("open", on); $("bPen").classList.toggle("on", on);
+  document.body.classList.toggle("pen-on", on);
+  if (on) { resEl.style.display = "none"; qEl.blur(); }
+  if (on) map.closePopup();
+  dragState(); placeControls();
+}
+function cancelCur() { if (cur) { if (cur.layer) drawGroup.removeLayer(cur.layer); cur = null; } }
+function paintPenUi() {
+  document.querySelectorAll("#pen [data-tool]").forEach(b => b.classList.toggle("on", b.dataset.tool === penTool));
+  document.querySelectorAll("#pen [data-color]").forEach(b => b.classList.toggle("on", b.dataset.color === penColor));
+  document.querySelectorAll("#pen [data-w]").forEach(b => b.classList.toggle("on", +b.dataset.w === penWidth));
+  $("palDot").style.background = penColor; $("pCustom").value = /^#[0-9a-f]{6}$/i.test(penColor) ? penColor : "#e03131";
+}
+$("bPen").onclick = () => setPen(!penOn);
+document.querySelectorAll("#pen [data-tool]").forEach(b => b.onclick = () => { penTool = b.dataset.tool; paintPenUi(); dragState(); });
+document.querySelectorAll("#pen [data-color]").forEach(b => b.onclick = () => { penColor = b.dataset.color; paintPenUi(); $("palRow").classList.remove("open"); $("pPal").classList.remove("on"); placeControls(); });
+document.querySelectorAll("#pen [data-w]").forEach(b => b.onclick = () => { penWidth = +b.dataset.w; paintPenUi(); });
+$("pUndo").onclick = () => { const sh = shapes[shapes.length - 1]; if (sh) removeShape(sh, true); };
+$("pRedo").onclick = () => { const d = redoStack.pop(); if (d) { addShape(d); saveShapes(); updatePenBtns(); } };
+$("pClear").onclick = () => { while (shapes.length) drawGroup.removeLayer(shapes.pop().layer); redoStack.length = 0; saveShapes(); updatePenBtns(); };
+$("pPal").onclick = () => { $("palRow").classList.toggle("open"); $("pPal").classList.toggle("on", $("palRow").classList.contains("open")); placeControls(); };
+$("pCustom").addEventListener("input", e => { penColor = e.target.value; paintPenUi(); });
+
+/* Малювання пальцем / мишею по карті */
+const mapEl = map.getContainer();
+function refreshCur() {
+  if (cur.t === "free") {
+    if (!cur.layer && cur.p.length > 1) { cur.layer = makeShapeLayer(cur); drawGroup.addLayer(cur.layer); }
+    else if (cur.layer) cur.layer.setLatLngs(cur.p);
+  } else if (cur.p.length > 1) {
+    if (cur.layer) drawGroup.removeLayer(cur.layer);
+    cur.layer = makeShapeLayer(cur); drawGroup.addLayer(cur.layer);
+  }
+}
+mapEl.addEventListener("pointerdown", e => {
+  if (!penOn) return;
+  if (!e.isPrimary) { cancelCur(); return; }          // другий палець — це масштабування, а не малювання
+  if (penTool === "erase" || (e.pointerType === "mouse" && e.button !== 0)) return;
+  if (e.target.closest(".leaflet-control, .leaflet-popup")) return;
+  e.preventDefault();
+  try { mapEl.setPointerCapture(e.pointerId); } catch (_) { /* не критично */ }
+  const ll = map.mouseEventToLatLng(e);
+  cur = { t: penTool, c: penColor, w: penWidth, p: [rd(ll)], r: 0, layer: null, last: map.latLngToContainerPoint(ll) };
+});
+mapEl.addEventListener("pointermove", e => {
+  if (!cur || !e.isPrimary) return;
+  const ll = map.mouseEventToLatLng(e), pt = map.latLngToContainerPoint(ll);
+  if (cur.t === "free") { if (pt.distanceTo(cur.last) < 3) return; cur.last = pt; cur.p.push(rd(ll)); }
+  else { cur.p[1] = rd(ll); if (cur.t === "circle") cur.r = map.distance(L.latLng(cur.p[0]), ll); }
+  refreshCur();
+});
+function endDraw(e) {
+  if (!cur) return;
+  const c = cur; cur = null;
+  const big = c.t === "free" ? c.p.length > 1
+    : c.p.length > 1 && map.latLngToContainerPoint(L.latLng(c.p[0])).distanceTo(map.latLngToContainerPoint(L.latLng(c.p[1]))) >= 6;
+  if (!big) { if (c.layer) drawGroup.removeLayer(c.layer); return; }
+  if (c.layer) drawGroup.removeLayer(c.layer);
+  addShape({ t: c.t, c: c.c, w: c.w, p: c.p, r: c.r });
+  redoStack.length = 0; saveShapes(); updatePenBtns();
+}
+mapEl.addEventListener("pointerup", endDraw);
+mapEl.addEventListener("pointercancel", () => cancelCur());
+paintPenUi(); updatePenBtns();
+
+/* ---------- пошук ---------- */
+const qEl = $("q"), resEl = $("res"), sx = $("sx");
+const pinLayer = L.layerGroup().addTo(map);
+const boundaryLayer = L.layerGroup().addTo(map);
+const clearMarks = () => { pinLayer.clearLayers(); boundaryLayer.clearLayers(); };
+
+function parseLatLng(q) {
+  q = q.trim().replace(/[–—−]/g, "-");
+  if (/^-?\d+,\d+\s+-?\d+,\d+$/.test(q)) q = q.replace(/,/g, ".");
+  const sign = h => (h === "S" || h === "W" ? -1 : 1);
+  let vals = [];
+  const dms = [...q.matchAll(/(\d+(?:\.\d+)?)\s*°\s*(?:(\d+(?:\.\d+)?)\s*['′’]\s*)?(?:(\d+(?:\.\d+)?)\s*(?:["″”]|'')\s*)?([NSEW])?/gi)];
+  if (dms.length === 2) {
+    vals = dms.map(m => { const h = (m[4] || "").toUpperCase(); return { v: sign(h) * (+m[1] + (+m[2] || 0) / 60 + (+m[3] || 0) / 3600), h }; });
+  } else {
+    const m = /^([NSEW])?\s*(-?\d+(?:\.\d+)?)\s*°?\s*([NSEW])?\s*[,;\s]\s*([NSEW])?\s*(-?\d+(?:\.\d+)?)\s*°?\s*([NSEW])?$/i.exec(q);
+    if (!m) return null;
+    const h1 = (m[1] || m[3] || "").toUpperCase(), h2 = (m[4] || m[6] || "").toUpperCase();
+    vals = [{ v: sign(h1) * +m[2], h: h1 }, { v: sign(h2) * +m[5], h: h2 }];
+  }
+  let [a, b] = vals;
+  if (a.h === "E" || a.h === "W" || b.h === "N" || b.h === "S") [a, b] = [b, a];
+  let lat = a.v, lon = b.v;
+  if (Math.abs(lat) > 90 && Math.abs(lon) <= 90) [lat, lon] = [lon, lat];
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  return { lat, lon };
+}
+
+function showPin(ll, html) {
+  clearMarks();
+  const m = L.marker(ll, { icon: L.divIcon({ className: "", html: '<div class="pin"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), interactive: !!html }).addTo(pinLayer);
+  if (html) m.bindPopup(html, { maxWidth: 300 }).openPopup();
+}
+const fmtLL = ll => ll.lat.toFixed(5) + ", " + ll.lng.toFixed(5);
+
+function goTo(item) {
+  resEl.style.display = "none";
+  if (item.kind === "coord") {
+    const ll = L.latLng(item.lat, item.lon);
+    map.setView(ll, Math.max(map.getZoom(), 12));
+    showPin(ll, '<div class="popup"><h4>' + T("coords") + "</h4><div>" + fmtLL(ll) + "</div></div>");
+  } else if (item.kind === "local") {
+    const fg = folderLayers.get(item.folder);
+    if (fg && !map.hasLayer(fg)) fg.addTo(map);
+    if (item.bounds && item.bounds.isValid() && !item.bounds.getSouthWest().equals(item.bounds.getNorthEast())) map.fitBounds(item.bounds.pad(0.2), { maxZoom: 14 });
+    else map.setView(item.ll, Math.max(map.getZoom(), 12));
+    clearMarks();
+    L.popup({ maxWidth: 300 }).setLatLng(item.ll).setContent(popupHtml(item.p)).openOn(map);
+  } else {
+    const ll = L.latLng(item.lat, item.lon);
+    const popup = '<div class="popup"><h4>' + esc(item.title) + "</h4><div>" + esc(item.sub || "") + "</div><div>" + fmtLL(ll) + "</div></div>";
+    let drawn = false;
+    if (item.geo && /Polygon/.test(item.geo.type)) {
+      try {
+        showPin(ll, null);
+        const gj = L.geoJSON(item.geo, { interactive: false, style: { color: "#ff3b30", weight: 3, fillColor: "#ff3b30", fillOpacity: .14 } }).addTo(boundaryLayer);
+        map.fitBounds(gj.getBounds().pad(0.1), { maxZoom: 15 });
+        L.marker(ll, { icon: L.divIcon({ className: "", html: '<div class="pin"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }) }).addTo(boundaryLayer).bindPopup(popup, { maxWidth: 300 }).openPopup();
+        drawn = true;
+      } catch (e) { drawn = false; }
+    }
+    if (!drawn) {
+      if (item.bbox && item.bbox[1] - item.bbox[0] > 0.0005) map.fitBounds([[item.bbox[0], item.bbox[2]], [item.bbox[1], item.bbox[3]]], { maxZoom: 15 });
+      else map.setView(ll, item.zoom || 14);
+      showPin(ll, popup);
+    }
+  }
+  qEl.blur();
+}
+
+let shown = [], remoteHtmlItems = [], remoteMsg = "", searchToken = 0;
+/* Нормалізація: ы→и, э→е, ё→е, ь/ъ/апостроф прибираємо, і/ї→и, є→е, ґ→г — щоб «Харьков», «Харків» та «Kharkiv» були близькими */
+const norm = s => s.toLowerCase().replace(/[ёыэъь'’ʼіїєґ]/g, c => ({ "ё": "е", "ы": "и", "э": "е", "ъ": "", "ь": "", "'": "", "’": "", "ʼ": "", "і": "и", "ї": "и", "є": "е", "ґ": "г" }[c]));
+const LAT2CYR = [["kyiv", "київ"], ["shch", "щ"], ["kh", "х"], ["zh", "ж"], ["ch", "ч"], ["sh", "ш"], ["ts", "ц"], ["ya", "я"], ["yu", "ю"], ["ye", "є"], ["yi", "ий"], ["ia", "я"], ["iu", "ю"], ["ie", "є"],
+  ["a", "а"], ["b", "б"], ["v", "в"], ["h", "г"], ["g", "г"], ["d", "д"], ["e", "е"], ["z", "з"], ["y", "и"], ["i", "і"], ["k", "к"], ["l", "л"], ["m", "м"],
+  ["n", "н"], ["o", "о"], ["p", "п"], ["r", "р"], ["s", "с"], ["t", "т"], ["u", "у"], ["f", "ф"], ["c", "к"], ["w", "в"], ["x", "кс"], ["j", "й"], ["q", "к"]];
+function latToCyr(s) {
+  s = s.toLowerCase(); let o = "";
+  for (let i = 0; i < s.length;) {
+    const m = LAT2CYR.find(([l]) => s.startsWith(l, i));
+    if (m) { o += m[1]; i += m[0].length; } else { o += s[i]; i++; }
+  }
+  return o;
+}
+function localMatches(q) {
+  const forms = [norm(q)];
+  if (/[a-z]/i.test(q) && !hasCyr(q)) forms.push(norm(latToCyr(q)));
+  const starts = [], inc = [];
+  searchIdx.forEach(arr => arr.forEach(e => {
+    const nm = norm(e.name);
+    if (forms.some(f => nm.startsWith(f))) starts.push(e); else if (forms.some(f => nm.includes(f))) inc.push(e);
+  }));
+  return starts.concat(inc).slice(0, 6).map(e => ({ kind: "local", folder: e.folder, name: e.name, ll: e.ll, bounds: e.bounds, p: e.p }));
+}
+function drawResults(q) {
+  resEl.innerHTML = ""; shown = []; selIdx = -1;
+  const add = (it, title, sub) => {
+    const d = document.createElement("div"); d.className = "it";
+    d.innerHTML = esc(title) + (sub ? "<small>" + esc(sub) + "</small>" : "");
+    d.onclick = () => goTo(it); resEl.appendChild(d); shown.push(it);
+  };
+  const hd = t => { const d = document.createElement("div"); d.className = "hd"; d.textContent = t; resEl.appendChild(d); };
+  const c = parseLatLng(q);
+  if (c) { hd(T("coords")); add({ kind: "coord", lat: c.lat, lon: c.lon }, c.lat.toFixed(5) + ", " + c.lon.toFixed(5), T("go_coords")); }
+  if (q.length >= 2 && !c) {
+    if (remoteHtmlItems.length) { hd(T("h_places")); remoteHtmlItems.forEach(it => add(it, it.title, it.sub)); }
+    const loc = localMatches(q).slice(0, 4);
+    if (loc.length) { hd(T("h_mine")); loc.forEach(it => add(it, it.name, folderLabel(it.folder))); }
+    if (remoteMsg) { const m = document.createElement("div"); m.className = "msg"; m.textContent = T(remoteMsg); resEl.appendChild(m); }
+  }
+  resEl.style.display = resEl.children.length ? "block" : "none";
+}
+async function nominatim(params) {
+  const r = await fetch("https://nominatim.openstreetmap.org/search?" + params, { headers: { Accept: "application/json" } });
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+async function photon(q) {
+  const c = map.getCenter();
+  const r = await fetch("https://photon.komoot.io/api/?limit=10&osm_tag=place" + (LANG === "en" ? "&lang=en" : "") + "&lat=" + c.lat + "&lon=" + c.lng + "&q=" + encodeURIComponent(q));
+  if (!r.ok) throw new Error(r.status);
+  return (await r.json()).features || [];
+}
+async function openMeteo(q) {
+  const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?count=10&format=json&language=" + LANG + "&name=" + encodeURIComponent(q));
+  if (!r.ok) throw new Error(r.status);
+  return (await r.json()).results || [];
+}
+const distKm = (a, b) => L.latLng(a[0], a[1]).distanceTo(L.latLng(b[0], b[1])) / 1000;
+const OSM_T = { N: "node", W: "way", R: "relation" };
+const geoCache = new Map();
+/* Російська → українська правопис (для сіл, у яких в OSM є лише українська назва) */
+function ruToUk(q) {
+  return q.replace(/ё/gi, "е").replace(/ы/gi, "и").replace(/э/gi, "е").replace(/ъ/gi, "")
+          .replace(/ск(?=\s|$)/gi, "ськ").replace(/цк(?=\s|$)/gi, "цьк").replace(/овка(?=\s|$)/gi, "івка");
+}
+const hasCyr = s => /[а-яёіїєґ]/i.test(s);
+async function geocode(q) {
+  const key = LANG + "|" + q.toLowerCase();
+  if (geoCache.has(key)) return geoCache.get(key);
+  const b = map.getBounds();
+  const vb = "&viewbox=" + [b.getWest(), b.getNorth(), b.getEast(), b.getSouth()].join(",");
+  const common = t => "format=jsonv2&accept-language=" + encodeURIComponent(I18N[LANG].acceptLang) +
+    "&addressdetails=1&namedetails=1&polygon_geojson=1&polygon_threshold=0.0004&limit=10&q=" + encodeURIComponent(t);
+  const variant = hasCyr(q) ? ruToUk(q) : "";
+  const hasVar = variant && variant.toLowerCase() !== q.toLowerCase();
+  // Nominatim шукає за назвами будь-якою мовою (uk / ru / en), Photon — за початком назви
+  const jobs = [nominatim(common(q) + "&featureType=settlement" + vb), photon(q), openMeteo(q)];
+  if (hasVar) jobs.push(nominatim(common(variant) + "&featureType=settlement" + vb), photon(variant), openMeteo(variant));
+  const res = await Promise.allSettled(jobs);
+  const ok = r => r.status === "fulfilled" ? r.value : [];
+  let nom = ok(res[0]).concat(hasVar ? ok(res[3]) : []);
+  let pho = ok(res[1]).concat(hasVar ? ok(res[4]) : []);
+  const geo = ok(res[2]).concat(hasVar ? ok(res[5]) : []);
+  let failed = res.every(r => r.status === "rejected");
+  if (nom.length + pho.length + geo.length < 3) {              // загальний пошук, якщо мало результатів
+    try { nom = nom.concat(await nominatim(common(q) + vb)); failed = false; } catch (e) { /* лишаємо що є */ }
+  }
+  const seen = new Set(), items = [];
+  const push = (k, it) => { if (!seen.has(k)) { seen.add(k); items.push(it); } };
+  nom.forEach(d => {
+    const a = d.address || {}, nd = d.namedetails || {};
+    const main = nd["name:" + LANG] || nd["name:uk"] || d.name || (d.display_name || "").split(", ")[0];
+    const alts = ["uk", "ru", "en"].filter(l => l !== LANG).map(l => nd["name:" + l]).filter((x, i, arr) => x && x !== main && arr.indexOf(x) === i);
+    push(d.osm_type + d.osm_id, {
+      kind: "remote", lat: +d.lat, lon: +d.lon, bbox: d.boundingbox ? d.boundingbox.map(Number) : null, geo: d.geojson || null,
+      title: main + (alts.length ? " (" + alts.join(" · ") + ")" : ""),
+      sub: [typeName(d.addresstype) || typeName(d.type), [a.municipality || a.county, a.state, a.country].filter(Boolean).join(", ")].filter(Boolean).join(" · ")
+    });
+  });
+  pho.forEach(f => {
+    const p = f.properties || {}, g = f.geometry && f.geometry.coordinates; if (!g || !p.name) return;
+    push((OSM_T[p.osm_type] || p.osm_type) + p.osm_id, {
+      kind: "remote", lat: g[1], lon: g[0], geo: null,
+      bbox: p.extent ? [p.extent[3], p.extent[1], p.extent[0], p.extent[2]] : null,
+      title: p.name,
+      sub: [typeName(p.osm_value), [p.county, p.state, p.country].filter(Boolean).join(", ")].filter(Boolean).join(" · ")
+    });
+  });
+  geo.forEach(g => {
+    if (!g || !g.name || g.latitude == null) return;
+    const ll = [g.latitude, g.longitude], nm = norm(g.name);
+    // не дублюємо те, що вже знайшли інші джерела (та сама назва поблизу)
+    if (items.some(it => norm(String(it.title).split(" (")[0]) === nm && distKm(ll, [it.lat, it.lon]) < 8)) return;
+    const city = /^PPL(C|A\d?)$/.test(g.feature_code || "");
+    items.push({
+      kind: "remote", lat: ll[0], lon: ll[1], geo: null, bbox: null, zoom: city ? 12 : 14,
+      title: g.name,
+      sub: [typeName(city ? "geo_city" : "geo_place"), [g.admin2, g.admin1, g.country].filter(Boolean).join(", ")].filter(Boolean).join(" · ")
+    });
+  });
+  if (!items.length && failed) throw new Error("offline");
+  const out = items.slice(0, 12);
+  geoCache.set(key, out);
+  return out;
+}
+async function remoteSearch(q) {
+  const my = ++searchToken;
+  remoteHtmlItems = []; remoteMsg = "searching"; drawResults(q);
+  try {
+    const items = await geocode(q);
+    if (my !== searchToken) return;
+    remoteHtmlItems = items;
+    remoteMsg = items.length ? "" : "nothing";
+  } catch (e) {
+    if (my !== searchToken) return;
+    remoteMsg = "err";
+  }
+  drawResults(q);
+}
+let typingTimer, remoteTimer;
+qEl.addEventListener("input", () => {
+  const q = qEl.value.trim(); sx.style.display = qEl.value ? "block" : "none";
+  searchToken++; remoteHtmlItems = []; remoteMsg = "";
+  clearTimeout(typingTimer); clearTimeout(remoteTimer);
+  if (!q) { resEl.style.display = "none"; return; }
+  typingTimer = setTimeout(() => drawResults(q), 120);
+  // пошук по всьому світу починається сам, коли ти на мить зупинився
+  if (q.length >= 3 && !parseLatLng(q)) remoteTimer = setTimeout(() => remoteSearch(q), 500);
+});
+function submitSearch() {
+  const q = qEl.value.trim(); if (!q) return;
+  const c = parseLatLng(q);
+  if (c) { goTo({ kind: "coord", lat: c.lat, lon: c.lon }); return; }
+  if (q.length >= 2) remoteSearch(q);
+}
+qEl.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); submitSearch(); } if (e.key === "Escape") { resEl.style.display = "none"; qEl.blur(); } });
+qEl.addEventListener("focus", () => { if (qEl.value.trim()) drawResults(qEl.value.trim()); });
+$("sgo").onclick = submitSearch;
+sx.onclick = () => { qEl.value = ""; sx.style.display = "none"; resEl.style.display = "none"; clearMarks(); qEl.focus(); };
+map.on("click", () => { resEl.style.display = "none"; });
+L.DomEvent.disableScrollPropagation(resEl);
+
+
+
+/* ---------- календар змін (архів карти) ---------- */
+let snaps = [{ d: BASE_SNAPSHOT_DATE, f: null }];     // знімки за датами, від найстарішого
+let indexLoaded = false, calMonth = null, calNote = "", calNoteKind = "";
+const snapCache = new Map();
+const kyivToday = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Kyiv" });
+function addDays(str, n) { const [y, m, d] = str.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); }
+function addMonths(str, n) {
+  const [y, m, d] = str.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m - 1 + n + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m - 1 + n, Math.min(d, last))).toISOString().slice(0, 10);
+}
+function fmtDate(str) { const [y, m, d] = str.split("-"); return d + "." + m + "." + y; }
+async function gunzip(buf) {
+  const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return await new Response(stream).text();
+}
+async function loadIndex() {
+  try {
+    const r = await fetch(HISTORY_DIR + "index.json", { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    const list = (j.mid === MAP_ID ? (j.snapshots || []) : []).filter(x => x && x.d && x.f);
+    if (!list.some(x => x.d === BASE_SNAPSHOT_DATE)) list.push({ d: BASE_SNAPSHOT_DATE, f: null });
+    list.sort((a, b) => a.d < b.d ? -1 : 1);
+    snaps = list; indexLoaded = true;
+  } catch (e) { indexLoaded = false; }
+}
+const snapFor = date => { let r = null; snaps.forEach(sn => { if (sn.d <= date) r = sn; }); return r; };
+async function loadSnapText(sn) {
+  const key = sn.d + "|" + (sn.f || "embedded");
+  if (snapCache.has(key)) return snapCache.get(key);
+  let txt;
+  if (!sn.f) txt = snapshotText();
+  else {
+    const r = await fetch(HISTORY_DIR + sn.f, { cache: "no-cache" });
+    if (!r.ok) throw new Error(r.status);
+    txt = sn.f.endsWith(".gz") ? await gunzip(await r.arrayBuffer()) : await r.text();
+  }
+  if (snapCache.size > 6) snapCache.delete(snapCache.keys().next().value);
+  snapCache.set(key, txt);
+  return txt;
+}
+function updateCalBtn() {
+  $("calCode").textContent = viewDate ? viewDate.slice(8, 10) + "." + viewDate.slice(5, 7) : T("live");
+  document.body.classList.toggle("archive", !!viewDate);
+  $("dPrev").disabled = (viewDate || kyivToday()) <= snaps[0].d;
+  $("dNext").disabled = !viewDate;
+}
+async function stepDay(n) {
+  if (!indexLoaded) { await loadIndex(); updateCalBtn(); }
+  const t = addDays(viewDate || kyivToday(), n);
+  if (t < snaps[0].d) return;
+  showDate(t);                               // сьогоднішня дата або пізніша автоматично повертає на «живу» карту
+}
+function goLive() {
+  viewDate = null; viewSaved = null; calNote = "";
+  render(liveGroups);
+  updateCalBtn(); renderStatus(); renderCal();
+}
+let showToken = 0;
+async function showDate(date) {
+  const my = ++showToken;
+  const today = kyivToday();
+  if (!date || date >= today) { goLive(); closePanels(); return; }
+  const sn = snapFor(date);
+  if (!sn) { calNote = T("cal_none", fmtDate(snaps[0].d)); calNoteKind = "warn"; renderCal(); return; }
+  try {
+    const groups = parseKml(await loadSnapText(sn));
+    if (my !== showToken) return;           // користувач вже перейшов на іншу дату
+    viewDate = date; viewSaved = sn.d; calNote = "";
+    render(groups);
+    updateCalBtn(); renderStatus(); renderCal(); closePanels();
+  } catch (e) {
+    console.error(e); calNote = T("cal_fail"); calNoteKind = "warn"; renderCal();
+  }
+}
+function renderCal() {
+  const panel = $("calPanel"); if (!panel.classList.contains("open")) return;
+  const today = kyivToday(), eff = viewDate || today, first = snaps[0].d;
+  if (!calMonth) calMonth = eff.slice(0, 7);
+  const [y, m] = calMonth.split("-").map(Number);
+  const loc = I18N[LANG].locale;
+  const title = new Intl.DateTimeFormat(loc, { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, 1)));
+  const wd = i => new Intl.DateTimeFormat(loc, { weekday: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2024, 0, 1 + i)));
+  const own = new Set(snaps.map(sn => sn.d));
+  const offset = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7, days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  let h = '<div class="ch"><button data-n="-1" aria-label="prev">‹</button><b>' + esc((title.charAt(0).toUpperCase() + title.slice(1)).replace(/\s?[рг]\.$/, "")) + '</b><button data-n="1" aria-label="next">›</button></div>';
+  h += '<div class="cq">' + [["today", "q_today"], ["yday", "q_yday"], ["week", "q_week"], ["month", "q_month"]].map(([k, t]) => '<button data-q="' + k + '">' + esc(T(t)) + "</button>").join("") + "</div>";
+  h += '<div class="cg">';
+  for (let i = 0; i < 7; i++) h += '<div class="w">' + esc(wd(i)) + "</div>";
+  for (let i = 0; i < offset; i++) h += "<div></div>";
+  for (let d = 1; d <= days; d++) {
+    const ds = calMonth + "-" + String(d).padStart(2, "0");
+    const dis = ds < first || ds > today;
+    h += '<button class="d' + (dis ? " dis" : "") + (own.has(ds) ? " has" : "") + (ds === eff ? " sel" : "") + '" data-d="' + ds + '"' + (dis ? " disabled" : "") + ">" + d + "</button>";
+  }
+  h += "</div>";
+  let note = calNote, kind = calNoteKind;
+  if (!note && viewDate && viewSaved !== viewDate) note = T("cal_saved", fmtDate(viewSaved));
+  if (!note && !indexLoaded) note = T("cal_nofile");
+  h += '<div class="cn" style="display:' + (note ? "block" : "none") + '">' + esc(note) + "</div>";
+  h += '<div class="cl">' + esc(T("cal_legend")) + "</div>";
+  panel.innerHTML = h;
+}
+function closePanels() { $("calPanel").classList.remove("open"); $("langMenu").classList.remove("open"); }
+$("dPrev").onclick = () => stepDay(-1);
+$("dNext").onclick = () => stepDay(1);
+$("calBtn").onclick = async e => {
+  e.stopPropagation();
+  const open = !$("calPanel").classList.contains("open");
+  $("langMenu").classList.remove("open");
+  $("calPanel").classList.toggle("open", open);
+  if (open) { calMonth = null; calNote = ""; renderCal(); await loadIndex(); renderCal(); }
+};
+$("calPanel").addEventListener("click", e => {
+  e.stopPropagation();
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.n) { const [y, m] = calMonth.split("-").map(Number); calMonth = new Date(Date.UTC(y, m - 1 + Number(b.dataset.n), 1)).toISOString().slice(0, 7); calNote = ""; renderCal(); return; }
+  const today = kyivToday();
+  if (b.dataset.d) { calNote = ""; showDate(b.dataset.d); return; }
+  if (b.dataset.q) {
+    const t = { today: today, yday: addDays(today, -1), week: addDays(today, -7), month: addMonths(today, -1) }[b.dataset.q];
+    calNote = ""; showDate(t);
+    if (t < snaps[0].d) { calMonth = t.slice(0, 7); }
+  }
+});
+
+
+/* ---------- клавіатура (комп'ютер) ---------- */
+let selIdx = -1;
+function markSel() {
+  const items = resEl.querySelectorAll(".it");
+  items.forEach((d, i) => d.classList.toggle("sel", i === selIdx));
+  if (items[selIdx]) items[selIdx].scrollIntoView({ block: "nearest" });
+}
+qEl.addEventListener("keydown", e => {
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    if (!shown.length) return;
+    e.preventDefault();
+    selIdx = e.key === "ArrowDown" ? Math.min(selIdx + 1, shown.length - 1) : Math.max(selIdx - 1, 0);
+    markSel();
+  } else if (e.key === "Enter" && selIdx >= 0 && shown[selIdx]) {
+    e.preventDefault(); e.stopImmediatePropagation(); goTo(shown[selIdx]);
+  }
+}, true);
+document.addEventListener("keydown", e => {
+  const tag = (document.activeElement && document.activeElement.tagName) || "";
+  const typing = tag === "INPUT" || tag === "TEXTAREA";
+  if (e.key === "/" && !typing) { e.preventDefault(); qEl.focus(); qEl.select(); }
+  else if (e.key === "Escape" && document.body.classList.contains("full")) { setFull(false); }
+  else if (e.key === "Escape") { closePanels(); resEl.style.display = "none"; if (penOn) setPen(false); else if (mode) setMode(mode); }
+  else if ((e.ctrlKey || e.metaKey) && penOn && !typing && e.key.toLowerCase() === "z" && !e.shiftKey) { e.preventDefault(); $("pUndo").click(); }
+  else if ((e.ctrlKey || e.metaKey) && penOn && !typing && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) { e.preventDefault(); $("pRedo").click(); }
+});
+
+
+/* ---------- повний екран ---------- */
+function setFull(on) {
+  document.body.classList.toggle("full", on);
+  $("fsBtn").innerHTML = on ? FS_OUT : FS_IN;
+  if (on) { closePanels(); if (penOn) setPen(false); if (mode) setMode(mode); map.closePopup(); resEl.style.display = "none"; }
+  setTimeout(() => { map.invalidateSize(); placeControls(); }, 150);
+}
+$("fsBtn").onclick = async () => {
+  const on = !document.body.classList.contains("full");
+  setFull(on);
+  try {
+    if (on && document.documentElement.requestFullscreen && !document.fullscreenElement) await document.documentElement.requestFullscreen();
+    else if (!on && document.fullscreenElement) await document.exitFullscreen();
+  } catch (e) { /* системний повний екран недоступний — лишається режим без панелей */ }
+};
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && document.body.classList.contains("full")) setFull(false); });
+
+/* ---------- перемикач мови ---------- */
+function applyLang() {
+  document.documentElement.lang = LANG;
+  labelsLayer.setLang();
+  qEl.placeholder = T("search_ph");
+  $("sgo").textContent = T("find");
+  sx.title = sx.ariaLabel = T("clear");
+  $("bLine").title = T("line"); $("bLine").setAttribute("aria-label", T("line"));
+  $("bArea").title = T("area"); $("bArea").setAttribute("aria-label", T("area"));
+  $("bPen").title = T("pen"); $("bPen").setAttribute("aria-label", T("pen"));
+  document.querySelectorAll("#pen [data-tool]").forEach(b => { b.title = T("t_" + b.dataset.tool); b.setAttribute("aria-label", T("t_" + b.dataset.tool)); });
+  document.querySelectorAll("#pen [data-color]").forEach(b => b.title = T("color"));
+  document.querySelectorAll("#pen [data-w]").forEach(b => b.title = T({ 2: "w_thin", 4: "w_mid", 7: "w_thick" }[b.dataset.w]));
+  $("pUndo").title = T("undo"); $("pRedo").title = T("redo"); $("pClear").textContent = T("clear_all"); $("pPal").title = T("palette"); $("palCustom").title = T("custom_color");
+  $("fsBtn").title = T("fullscreen");
+  $("langBtn").title = T("lang_title"); $("langCode").textContent = I18N[LANG].code;
+  $("calBtn").title = T("cal_title"); $("dPrev").title = T("day_prev"); $("dNext").title = T("day_next");
+  $("dPrev").setAttribute("aria-label", T("day_prev")); $("dNext").setAttribute("aria-label", T("day_next"));
+  updateCalBtn(); renderCal();
+  warn.innerHTML = T("tilewarn");
+  document.querySelectorAll("#langMenu button").forEach(b => b.classList.toggle("act", b.dataset.l === LANG));
+  renderStatus();
+  rebuildLayersCtl();
+  drawMeasure();
+  const q = qEl.value.trim();
+  if (q) {
+    searchToken++; remoteHtmlItems = []; remoteMsg = "";
+    drawResults(q);
+    if (q.length >= 3 && !parseLatLng(q)) remoteSearch(q);
+  }
+}
+function setLang(l) {
+  if (!I18N[l]) return;
+  LANG = l;
+  try { localStorage.setItem("awm_lang", l); } catch (e) { /* не зберігаємо */ }
+  $("langMenu").classList.remove("open");
+  applyLang();
+}
+$("langBtn").onclick = e => { e.stopPropagation(); $("calPanel").classList.remove("open"); $("langMenu").classList.toggle("open"); };
+document.querySelectorAll("#langMenu button").forEach(b => { b.onclick = e => { e.stopPropagation(); setLang(b.dataset.l); }; });
+map.on("click", closePanels);
+applyLang();
+loadIndex().then(() => { updateCalBtn(); renderCal(); });
+</script>
+</body>
+</html>
