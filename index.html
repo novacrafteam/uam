@@ -535,13 +535,19 @@ const FsControl = L.Control.extend({
 new FsControl().addTo(map);
 L.control.scale({ position: "topleft", imperial: false }).addTo(map);
 
+/* CARTO з 2026 вимагає безкоштовний ключ (https://carto.com/basemaps/apikey). Встав його між лапками нижче.
+   Поки ключа немає, схема / темна / Tactical беруть безкоштовні плитки Esri — без водяних знаків. */
+const CARTO_KEY = "cb1_55hm_1_0510ab4dc9b18b1094a475bf";
+const cartoUrl = style => "https://{s}.basemaps.cartocdn.com/rastertiles/" + style + "/{z}/{x}/{y}{r}.png?key=" + encodeURIComponent(CARTO_KEY);
+const ESRI_DARK = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}";
+const ESRI_STREET = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}";
 const tl = (url, attr, extra) => L.tileLayer(url, Object.assign({ maxZoom: 19, attribution: attr, crossOrigin: false }, extra || {}));
 const baseLayers = {
-  road: tl("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", "© OpenStreetMap, © CARTO", { subdomains: "abcd" }),
+  road: CARTO_KEY ? tl(cartoUrl("voyager"), "© OpenStreetMap, © CARTO", { subdomains: "abcd" }) : tl(ESRI_STREET, "Esri"),
   osm: tl("https://tile.openstreetmap.org/{z}/{x}/{y}.png", "© OpenStreetMap"),
   sat: tl("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", "Esri, Maxar"),
-  dark: tl("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", "© OpenStreetMap, © CARTO", { subdomains: "abcd" }),
-  tac: tl("https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png", "© OpenStreetMap, © CARTO", { subdomains: "abcd", className: "uam-tac" }),
+  dark: CARTO_KEY ? tl(cartoUrl("dark_all"), "© OpenStreetMap, © CARTO", { subdomains: "abcd" }) : tl(ESRI_DARK, "Esri", { maxNativeZoom: 16 }),
+  tac: CARTO_KEY ? tl(cartoUrl("dark_nolabels"), "© OpenStreetMap, © CARTO", { subdomains: "abcd", className: "uam-tac" }) : tl(ESRI_DARK, "Esri", { maxNativeZoom: 16, className: "uam-tac" }),
   gmap: tl("https://mt{s}.google.com/vt/lyrs=m&hl=uk&x={x}&y={y}&z={z}", "© Google", { subdomains: "0123", maxZoom: 20 }),
   ghyb: tl("https://mt{s}.google.com/vt/lyrs=y&hl=uk&x={x}&y={y}&z={z}", "© Google", { subdomains: "0123", maxZoom: 20 }),
   gsat: tl("https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", "© Google", { subdomains: "0123", maxZoom: 20 }),
