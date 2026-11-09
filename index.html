@@ -301,6 +301,17 @@
     #dock > #tools { bottom:14px; } #bar button { height:40px; padding:0 12px; } #bar button::after { display:none; }
     #dock > #status { top:54px; } .leaflet-top.leaflet-left { bottom:110px !important; }
   }
+
+  /* ======== UAM: стиль карти та полігонів ======== */
+  .leaflet-container { background:#06101c; font-family:system-ui,sans-serif; }
+  .leaflet-tile-pane .uam-tac { filter:sepia(1) hue-rotate(178deg) saturate(2.6) brightness(1.18) contrast(1.12); }
+  .leaflet-tile-pane .uam-sat { filter:saturate(1.18) contrast(1.1) brightness(.94); }
+  .uam-poly { stroke-linejoin:round; transition:fill-opacity .18s, stroke-width .18s; cursor:pointer; }
+  .uam-line { stroke-linejoin:round; }
+  .leaflet-overlay-pane svg path.uam-poly:hover { filter:brightness(1.15); }
+  .leaflet-container a.leaflet-popup-close-button { color:var(--muted); } .leaflet-container a.leaflet-popup-close-button:hover { color:var(--yel); }
+  .leaflet-tooltip { background:var(--p1); color:var(--ink); border:1px solid #2b4a6b; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,.5); }
+  .leaflet-layer { transition:opacity .25s; }
 </style>
 </head>
 <body>
@@ -419,7 +430,7 @@ const I18N = {
   uk: {
     code: "UK", locale: "uk-UA", acceptLang: "uk,ru;q=0.8,en;q=0.6",
     lang_title: "Мова", search_ph: "Місто, село, координати", find: "Знайти", clear: "Очистити", line: "Лінія", area: "Площа",
-    b_road: "Схема", b_osm: "Схема (OSM)", b_sat: "Супутник", b_dark: "Темна", borders: "Кордони країн", names_beta: "Назви мовою інтерфейсу (бета)",
+    b_road: "Схема", b_osm: "Схема (OSM)", b_sat: "Супутник", b_dark: "Темна", b_tac: "UAM Tactical", b_gmap: "Google Maps", b_ghyb: "Google Гібрид", b_gsat: "Google Супутник", b_gter: "Google Рельєф", borders: "Кордони країн", names_beta: "Назви мовою інтерфейсу (бета)",
     tilewarn: "Фон карти (схема/супутник) не завантажується. Відкрий <b>index.html</b> у звичайному браузері (Chrome/Safari) або з хостингу, а не в перегляді всередині додатка. Лінії та позначки карти при цьому працюють.",
     st_loading: "завантаження…", st_snapshot: "збережена копія карти", st_google_loading: "завантаження з Google…",
     st_ok: t => "Google Мої карти · перевірено " + t, st_updating: "оновлення…", st_fail: "не вдалося оновити · показано збережену копію", st_reload: "оновити",
@@ -436,7 +447,7 @@ const I18N = {
   en: {
     code: "EN", locale: "en-US", acceptLang: "en,uk;q=0.8,ru;q=0.6",
     lang_title: "Language", search_ph: "City, village, coordinates", find: "Search", clear: "Clear", line: "Line", area: "Area",
-    b_road: "Map", b_osm: "Map (OSM)", b_sat: "Satellite", b_dark: "Dark", borders: "Country borders", names_beta: "Names in interface language (beta)",
+    b_road: "Map", b_osm: "Map (OSM)", b_sat: "Satellite", b_dark: "Dark", b_tac: "UAM Tactical", b_gmap: "Google Maps", b_ghyb: "Google Hybrid", b_gsat: "Google Satellite", b_gter: "Google Terrain", borders: "Country borders", names_beta: "Names in interface language (beta)",
     tilewarn: "The map background (map/satellite) is not loading. Open <b>index.html</b> in a regular browser (Chrome/Safari) or from a web host, not in an in-app viewer. Lines and markers of the map still work.",
     st_loading: "loading…", st_snapshot: "saved copy of the map", st_google_loading: "loading from Google…",
     st_ok: t => "Google My Maps · checked " + t, st_updating: "updating…", st_fail: "update failed · showing the saved copy", st_reload: "refresh",
@@ -453,7 +464,7 @@ const I18N = {
   ru: {
     code: "RU", locale: "ru-RU", acceptLang: "ru,uk;q=0.8,en;q=0.6",
     lang_title: "Язык", search_ph: "Город, село, координаты", find: "Найти", clear: "Очистить", line: "Линия", area: "Площадь",
-    b_road: "Схема", b_osm: "Схема (OSM)", b_sat: "Спутник", b_dark: "Тёмная", borders: "Границы стран", names_beta: "Названия на языке интерфейса (бета)",
+    b_road: "Схема", b_osm: "Схема (OSM)", b_sat: "Спутник", b_dark: "Тёмная", b_tac: "UAM Tactical", b_gmap: "Google Maps", b_ghyb: "Google Гибрид", b_gsat: "Google Спутник", b_gter: "Google Рельеф", borders: "Границы стран", names_beta: "Названия на языке интерфейса (бета)",
     tilewarn: "Фон карты (схема/спутник) не загружается. Открой <b>index.html</b> в обычном браузере (Chrome/Safari) или с хостинга, а не во встроенном просмотре приложения. Линии и метки карты при этом работают.",
     st_loading: "загрузка…", st_snapshot: "сохранённая копия карты", st_google_loading: "загрузка из Google…",
     st_ok: t => "Google Мои карты · проверено " + t, st_updating: "обновление…", st_fail: "не удалось обновить · показана сохранённая копия", st_reload: "обновить",
@@ -529,9 +540,16 @@ const baseLayers = {
   road: tl("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", "© OpenStreetMap, © CARTO", { subdomains: "abcd" }),
   osm: tl("https://tile.openstreetmap.org/{z}/{x}/{y}.png", "© OpenStreetMap"),
   sat: tl("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", "Esri, Maxar"),
-  dark: tl("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", "© OpenStreetMap, © CARTO", { subdomains: "abcd" })
+  dark: tl("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", "© OpenStreetMap, © CARTO", { subdomains: "abcd" }),
+  tac: tl("https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png", "© OpenStreetMap, © CARTO", { subdomains: "abcd", className: "uam-tac" }),
+  gmap: tl("https://mt{s}.google.com/vt/lyrs=m&hl=uk&x={x}&y={y}&z={z}", "© Google", { subdomains: "0123", maxZoom: 20 }),
+  ghyb: tl("https://mt{s}.google.com/vt/lyrs=y&hl=uk&x={x}&y={y}&z={z}", "© Google", { subdomains: "0123", maxZoom: 20 }),
+  gsat: tl("https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", "© Google", { subdomains: "0123", maxZoom: 20 }),
+  gter: tl("https://mt{s}.google.com/vt/lyrs=p&hl=uk&x={x}&y={y}&z={z}", "© Google", { subdomains: "0123", maxZoom: 20 })
 };
-baseLayers.sat.addTo(map);
+baseLayers.sat.options.className = "uam-sat";
+baseLayers.tac.addTo(map);
+const SELF_LABELLED = new Set([baseLayers.osm, baseLayers.gmap, baseLayers.ghyb, baseLayers.gter]);   // вже мають власні підписи
 
 /* Якщо плитки не вантажаться — показати зрозуміле повідомлення */
 let tileOk = 0, tileBad = 0;
@@ -639,14 +657,15 @@ const labelsLayer = new LabelsLayer();                         // за бажа�
 // назви мовою інтерфейсу замінюють підписи Esri; якщо їх вимкнути (або вони не завантажаться) — Esri повертається
 map.on("overlayadd", e => { if (e.layer === labelsLayer && map.hasLayer(borders)) map.removeLayer(borders); });
 map.on("overlayremove", e => { if (e.layer === labelsLayer && !map.hasLayer(borders)) borders.addTo(map); });
-map.on("baselayerchange", e => labelsLayer.setHidden(e.layer === baseLayers.osm));
+map.on("baselayerchange", e => labelsLayer.setHidden(SELF_LABELLED.has(e.layer)));
 
 let layersCtl = null;
 const folderLayers = new Map();   // назва -> L.featureGroup
 function rebuildLayersCtl() {
   if (layersCtl) layersCtl.remove();
   const bases = {};
-  bases[T("b_road")] = baseLayers.road; bases[T("b_osm")] = baseLayers.osm; bases[T("b_sat")] = baseLayers.sat; bases[T("b_dark")] = baseLayers.dark;
+  bases[T("b_tac")] = baseLayers.tac; bases[T("b_sat")] = baseLayers.sat; bases[T("b_dark")] = baseLayers.dark; bases[T("b_road")] = baseLayers.road; bases[T("b_osm")] = baseLayers.osm;
+  bases[T("b_gmap")] = baseLayers.gmap; bases[T("b_ghyb")] = baseLayers.ghyb; bases[T("b_gsat")] = baseLayers.gsat; bases[T("b_gter")] = baseLayers.gter;
   layersCtl = L.control.layers(bases, {}, { position: "bottomleft", collapsed: true }).addTo(map);
   layersCtl.addOverlay(borders, T("borders"));
   layersCtl.addOverlay(labelsLayer, T("names_beta"));
@@ -769,14 +788,19 @@ function buildLayer(p) {
       lyr = L.marker(g.c, { icon: iconFor(p), bubblingMouseEvents: true });
     } else if (g.t === "ln") {
       const l = p.st.line || {}, c = l.c || { color: "#3388ff", opacity: 1 };
-      lyr = L.polyline(g.c, { color: c.color, opacity: c.opacity, weight: Math.max(1.5, l.w || 1.5) });
+      lyr = L.polyline(g.c, { color: c.color, opacity: Math.max(.85, c.opacity), weight: Math.max(2, l.w || 2), lineCap: "round", lineJoin: "round", className: "uam-line" });
     } else {
       const l = p.st.line || {}, pl = p.st.poly || {};
       const lc = l.c || { color: "#3388ff", opacity: 1 }, fc = pl.c || lc;
-      lyr = L.polygon(g.c, {
-        stroke: (l.w || 0) >= 0.5, color: lc.color, opacity: lc.opacity, weight: Math.max(1, l.w || 1),
-        fill: pl.fill !== false, fillColor: fc.color, fillOpacity: fc.opacity
-      });
+      const base = {
+        stroke: true, color: lc.color, opacity: 1, weight: Math.max(1.8, l.w || 1.8), lineJoin: "round", lineCap: "round",
+        fill: pl.fill !== false, fillColor: fc.color, fillOpacity: Math.min(.5, Math.max(.2, fc.opacity)), className: "uam-poly"
+      };
+      lyr = L.polygon(g.c, base);
+      if (window.matchMedia("(hover:hover)").matches) {   // підсвітка при наведенні (лише на пристроях з мишкою)
+        lyr.on("mouseover", () => { if (!busy()) lyr.setStyle({ weight: base.weight + 1.6, fillOpacity: Math.min(.7, base.fillOpacity + .18) }); });
+        lyr.on("mouseout", () => lyr.setStyle({ weight: base.weight, fillOpacity: base.fillOpacity }));
+      }
     }
     bind(lyr, p); out.push(lyr);
   });
