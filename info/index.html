@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Важлива інформація — UAM | Ukraine Analytic Map</title>
+<meta name="description" content="Умови реклами, умови використання та важлива інформація проєкту UAM | Ukraine Analytic Map.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b2a4a'/%3E%3Ctext x='32' y='42' font-family='Arial' font-weight='900' font-size='24' text-anchor='middle' fill='%23ffd500'%3EUAM%3C/text%3E%3C/svg%3E">
+<style>
+:root { color-scheme: dark; --ink:#e8eef6; --muted:#8fa3b8; --yel:#ffd500; --p1:rgba(10,22,38,.86); --p2:#12263d; --line:#2b4a6b; }
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; min-height:100vh; font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink);
+  background:radial-gradient(1200px 600px at 20% -10%,#12315a 0,transparent 60%),radial-gradient(900px 500px at 100% 0,#1a2a14 0,transparent 55%),#07111d;
+  padding:max(14px,env(safe-area-inset-top)) 14px max(24px,env(safe-area-inset-bottom)); }
+.wrap { max-width:880px; margin:0 auto; }
+.top { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+.brand, .back, .tab, .card { background:var(--p1); border:1px solid var(--line); box-shadow:0 8px 30px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.07); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); }
+.brand { display:flex; align-items:center; gap:10px; padding:0 16px; height:46px; border-radius:14px; border-color:var(--yel); text-decoration:none; background:linear-gradient(135deg,#0d2038,#12315a); }
+.brand b { font-weight:900; font-size:22px; letter-spacing:.14em; color:var(--yel); }
+.brand i { font-style:normal; color:#4d6f95; font-size:24px; font-weight:300; }
+.brand span { font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--ink); }
+.back { display:inline-flex; align-items:center; gap:8px; height:46px; padding:0 18px; border-radius:14px; color:var(--ink); text-decoration:none; font-weight:600; font-size:14px; transition:.15s; }
+.back:hover { border-color:var(--yel); background:#1b3a5e; }
+h1 { margin:34px 0 6px; font-size:clamp(26px,5vw,38px); line-height:1.15; }
+h1 em { font-style:normal; color:var(--yel); }
+.lead { margin:0 0 22px; color:var(--muted); }
+.tabs { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:18px; }
+.tab { display:flex; flex-direction:column; align-items:flex-start; gap:6px; padding:14px 16px; border-radius:16px; color:var(--ink); text-decoration:none; font-weight:700; transition:.15s; }
+.tab small { font-weight:500; color:var(--muted); font-size:12.5px; line-height:1.35; }
+.tab svg { width:26px; height:26px; stroke:var(--yel); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.tab:hover { border-color:var(--yel); background:#1b3a5e; transform:translateY(-1px); }
+.tab.on { background:var(--yel); border-color:var(--yel); color:#07111d; }
+.tab.on small { color:#3a3200; } .tab.on svg { stroke:#07111d; }
+.card { border-radius:18px; padding:22px clamp(16px,4vw,30px); display:none; }
+.card.on { display:block; animation:fade .25s; }
+@keyframes fade { from { opacity:0; transform:translateY(6px); } }
+.card h2 { margin:0 0 4px; font-size:22px; color:var(--yel); }
+.card h3 { margin:22px 0 8px; font-size:17px; }
+.card p { margin:8px 0; }
+.card ul { margin:8px 0; padding-left:22px; } .card li { margin:7px 0; } .card li::marker { color:var(--yel); }
+.note { margin-top:16px; padding:12px 14px; border-left:3px solid var(--yel); background:rgba(255,213,0,.07); border-radius:0 10px 10px 0; color:#f3e9b0; }
+a.link { color:var(--yel); }
+.foot { margin-top:18px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; color:var(--muted); font-size:13.5px; }
+.foot a { color:var(--yel); }
+@media (max-width:640px) { .tabs { grid-template-columns:1fr; } .tab { flex-direction:row; align-items:center; gap:12px; } .tab small { display:none; } .brand span { display:none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="../" aria-label="UAM | Ukraine Analytic Map"><b>UAM</b><i>|</i><span>Ukraine Analytic Map</span></a>
+    <a class="back" href="../">← До карти</a>
+  </div>
+
+  <h1>Важлива <em>інформація</em></h1>
+  <p class="lead">Правила проєкту, умови співпраці та те, що потрібно знати перед використанням карти.</p>
+
+  <nav class="tabs" aria-label="Розділи">
+    <a class="tab" href="#ads" data-t="ads"><svg viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M17 9a4 4 0 0 1 0 6"/></svg>Умови реклами<small>Взаємний піар та правила публікацій</small></a>
+    <a class="tab" href="#terms" data-t="terms"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/></svg>Умови використання<small>Правила користування сайтом</small></a>
+    <a class="tab" href="#important" data-t="important"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/></svg>Важлива інформація<small>Про дані, безпеку та обмеження</small></a>
+  </nav>
+
+  <section class="card" id="ads">
+    <h2>Політика та умови рекламування</h2>
+    <h3>Пункт 1</h3>
+    <ul>
+      <li>Реклама в проєкті безкоштовна й відбувається у форматі <b>взаємного піару (ВП)</b>: ми публікуємо ваше рекламне повідомлення, а ви публікуєте наше.</li>
+      <li>Адміністрація проєкту має право відмовитися від взаємного піару або видалити пост, якщо вважає, що реклама порушує умови ВП, і повідомить вас про це.</li>
+      <li>Для підтвердження публікації адміністратори проєкту попросять скриншот повідомлення та мають право зайти на ваш канал. Якщо пост буде видалено раніше ніж за 24 години, ми також видаляємо ваш пост, а рекламодавця додаємо до чорного списку (ЧС).</li>
+    </ul>
+    <h3>Пункт 2</h3>
+    <ul>
+      <li>Адміністрація має повне право видалити пост без пояснення причини, якщо вважає, що він порушує правила ВП.</li>
+    </ul>
+    <div class="note">Звернення до підтримки: <a class="link" href="https://t.me/uamfeedback_bot" target="_blank" rel="noopener">@uamfeedback_bot</a></div>
+  </section>
+
+  <section class="card" id="terms">
+    <h2>Умови використання</h2>
+    <h3>1. Загальні положення</h3>
+    <p>UAM | Ukraine Analytic Map — це інформаційно-аналітичний проєкт, який візуалізує ситуацію на фронті в Україні на основі відкритих джерел. Користуючись сайтом, ви погоджуєтеся з цими умовами.</p>
+    <h3>2. Характер інформації</h3>
+    <p>Карта має ознайомчий характер. Вона не є офіційним джерелом і не замінює повідомлення Генерального штабу, Збройних Сил України чи інших державних органів. Дані можуть запізнюватися, бути неповними або містити неточності.</p>
+    <h3>3. Заборонено</h3>
+    <ul>
+      <li>використовувати карту для будь-яких дій, що можуть зашкодити людям, зокрема для коригування вогню чи планування нападів;</li>
+      <li>видавати дані карти за офіційні повідомлення або навмисно спотворювати їх;</li>
+      <li>масово вивантажувати дані (скрапінг) чи створювати надмірне навантаження на сайт без домовленості з адміністрацією;</li>
+      <li>прибирати або приховувати посилання на проєкт при поширенні матеріалів з карти.</li>
+    </ul>
+    <h3>4. Матеріали та сторонні сервіси</h3>
+    <p>Під час поширення скриншотів чи даних карти вказуйте посилання на UAM. Комерційне використання можливе лише за погодженням з адміністрацією. Підкладки карти (Esri, CARTO, Google, OpenStreetMap та ін.) належать їхнім власникам і підпадають під умови відповідних сервісів.</p>
+    <h3>5. Конфіденційність</h3>
+    <p>Сайт не вимагає реєстрації та не збирає персональних даних. У вашому браузері локально зберігаються лише налаштування (мова, власні малюнки на карті). Сторонні сервіси карт можуть отримувати технічні дані, як-от IP-адресу, згідно зі своїми політиками.</p>
+    <h3>6. Відмова від відповідальності</h3>
+    <p>Адміністрація не несе відповідальності за наслідки використання інформації з карти, а також за перебої в роботі сайту чи сторонніх сервісів.</p>
+    <h3>7. Зміни умов</h3>
+    <p>Ми можемо оновлювати ці умови. Актуальна редакція завжди доступна на цій сторінці, а дата останнього оновлення вказана внизу.</p>
+  </section>
+
+  <section class="card" id="important">
+    <h2>Важлива інформація</h2>
+    <h3>Що таке UAM</h3>
+    <p>Аналітична карта фронту в Україні. Дані підтягуються з нашої карти в Google Мої карти, а календар дозволяє переглядати стан карти за попередні дні.</p>
+    <h3>Обмеження</h3>
+    <ul>
+      <li>Карта не показує ситуацію в реальному часі й може відставати від подій.</li>
+      <li>Позначки та межі мають умовний характер, реальна лінія зіткнення може відрізнятися.</li>
+      <li>Для рішень, від яких залежить безпека, користуйтеся лише офіційними джерелами та сигналами повітряної тривоги.</li>
+    </ul>
+    <h3>Безпека (OPSEC)</h3>
+    <ul>
+      <li>Ми не публікуємо й просимо не надсилати нам координати, пересування чи розташування Сил оборони в реальному часі.</li>
+      <li>Не діліться скриншотами з власними позначками, що розкривають вашу позицію.</li>
+    </ul>
+    <h3>Корисне</h3>
+    <ul>
+      <li>У пошуку можна вводити назву міста, села або координати.</li>
+      <li>Інструменти «Лінія», «Площа» та «Малювати» працюють лише у вашому браузері: нічого не передається на сервер.</li>
+      <li>Знайшли помилку або маєте пропозицію? Напишіть у підтримку: <a class="link" href="https://t.me/uamfeedback_bot" target="_blank" rel="noopener">@uamfeedback_bot</a></li>
+      <li>Наш Telegram-канал: <a class="link" href="https://t.me/ukrainanalitic" target="_blank" rel="noopener">@ukrainanalitic</a></li>
+    </ul>
+  </section>
+
+  <div class="foot">
+    <span>Востаннє оновлено: 12:00 15.11.2026</span>
+    <a href="https://t.me/uamfeedback_bot" target="_blank" rel="noopener">Підтримка: @uamfeedback_bot</a>
+  </div>
+</div>
+<script>
+(function () {
+  var ids = ["ads", "terms", "important"];
+  function show() {
+    var h = (location.hash || "").replace("#", "");
+    if (ids.indexOf(h) < 0) h = "important";
+    ids.forEach(function (id) { document.getElementById(id).classList.toggle("on", id === h); });
+    document.querySelectorAll(".tab").forEach(function (a) { a.classList.toggle("on", a.dataset.t === h); });
+    var names = { ads: "Умови реклами", terms: "Умови використання", important: "Важлива інформація" };
+    document.title = names[h] + " — UAM | Ukraine Analytic Map";
+  }
+  window.addEventListener("hashchange", show); show();
+})();
+</script>
+</body>
+</html>
